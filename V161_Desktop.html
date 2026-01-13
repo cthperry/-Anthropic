@@ -5,6 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="data:,">
   <title>維修追蹤系統 - Desktop</title>
+
+  <!--
+    防呆：避免手機誤開 Desktop（左側選單版）
+    - 若需要在手機上強制開 Desktop，可用：V161_Desktop.html?force=desktop
+  -->
+  <script>
+    (function () {
+      try {
+        var sp = new URLSearchParams(location.search || '');
+        var force = (sp.get('force') || '').toLowerCase();
+        if (force === 'desktop') return;
+        var ua = navigator.userAgent || '';
+        var isMobileUA = /Android|iPhone|iPod|iPad/i.test(ua);
+        if (isMobileUA) {
+          location.replace('V161_Mobile.html' + location.search + location.hash);
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+  </script>
   
   <!-- ========================================
        ${AppConfig.getFullVersion()}
