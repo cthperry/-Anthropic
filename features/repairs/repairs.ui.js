@@ -987,7 +987,7 @@ class RepairUI {
     
     // 預先載入客戶資料，確保「公司名稱」清單在維修表單中一致可用
     try {
-      if (window.CustomerService && typeof window.CustomerService.init === 'function' && !window.CustomerService.isInitialized) {
+      if (window.CustomerService && typeof window.CustomerService.init === 'function') {
         window.CustomerService.init().catch(e => console.warn('CustomerService init failed:', e));
       }
     } catch (e) {
@@ -1768,6 +1768,7 @@ ${hint}` : ''}
   handleCustomerPick(event) {
     try {
       const raw = (event && event.target ? event.target.value : '');
+      const customerEl = (event && event.target) ? event.target : null;
       const company = (raw || '').toString().trim();
 
       const contactEl = this._getFormEl('contact');
@@ -1796,6 +1797,7 @@ ${hint}` : ''}
 
       // 公司被清空：必須清除聯絡人/電話/Email 與 datalist，避免殘留上一次的資料
       if (!company) {
+        try { if (customerEl) customerEl.dataset.companyPicked = '0'; } catch (_) {}
         if (contactEl) contactEl.value = '';
         if (phoneEl) phoneEl.value = '';
         if (emailEl) emailEl.value = '';
@@ -1831,11 +1833,15 @@ ${hint}` : ''}
       if (!window.CustomerService) {
         this._lastCustomerCompany = company;
         this._lastCustomerCompanyValid = false;
+        try { if (customerEl) customerEl.dataset.companyPicked = '0'; } catch (_) {}
         return;
       }
 
       // 只有在「公司存在於客戶主檔」時，才刷新聯絡人清單；否則清空 datalist 避免誤導
       const isValidCompany = hasCompany(company);
+
+      // 記錄：是否已「選定有效公司」（用於公司下拉行為判斷：避免必須先刪除才看得到完整清單）
+      try { if (customerEl) customerEl.dataset.companyPicked = isValidCompany ? '1' : '0'; } catch (_) {}
 
       const contacts = (isValidCompany && typeof window.CustomerService.getContactsByCompanyName === 'function')
         ? window.CustomerService.getContactsByCompanyName(company)
@@ -1943,6 +1949,208 @@ ${hint}` : ''}
   }
 
   // ========================================
+  // 公司下拉（自訂）
+  // - 解決：公司欄位要換公司時，必須先手動刪除再選取的操作成本
+  // - 保留：仍可直接輸入 + datalist 快速匹配
+  // ========================================
+
+  _closeCompanyDropdown(silent) {
+    try {
+      const el = this._companyDropdownEl;
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      this._companyDropdownEl = null;
+
+      if (this._companyDropdownScrollHandler) {
+        window.removeEventListener('scroll', this._companyDropdownScrollHandler, true);
+        window.removeEventListener('resize', this._companyDropdownScrollHandler, true);
+        this._companyDropdownScrollHandler = null;
+      }
+      if (this._companyDropdownOutsideHandler) {
+        document.removeEventListener('mousedown', this._companyDropdownOutsideHandler, true);
+        this._companyDropdownOutsideHandler = null;
+      }
+      if (this._companyDropdownKeyHandler) {
+        document.removeEventListener('keydown', this._companyDropdownKeyHandler, true);
+        this._companyDropdownKeyHandler = null;
+      }
+    } catch (e) {
+      if (!silent) console.warn('_closeCompanyDropdown failed:', e);
+    }
+  }
+
+  async toggleCompanyDropdown(event) {
+    try {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      // 先關閉其他下拉（避免兩個同時開啟造成遮擋/誤判）
+      try { if (this._contactDropdownEl) this._closeContactDropdown(true); } catch (_) {}
+
+      // 已開啟 → 關閉
+      if (this._companyDropdownEl) {
+        this._closeCompanyDropdown(true);
+        return;
+      }
+
+      const customerEl = this._getFormEl('customer');
+      if (!customerEl) return;
+
+      if (!window.CustomerService) return;
+
+      // 取得公司清單（去重）
+      let all = [];
+      try {
+        all = (typeof window.CustomerService.getAll === 'function')
+          ? (window.CustomerService.getAll() || [])
+          : (Array.isArray(window.CustomerService.customers) ? window.CustomerService.customers : []);
+      } catch (_) {
+        all = [];
+      }
+
+      const seen = new Set();
+      const names = [];
+      for (const c of (all || [])) {
+        const name = (c && !c.isDeleted ? (c.name || '') : '').toString().trim();
+        if (!name) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        names.push(name);
+      }
+
+      if (!names.length) return;
+
+      let q = (customerEl.value || '').toString().trim().toLowerCase();
+      const picked = (customerEl.dataset && customerEl.dataset.companyPicked === '1');
+      if (picked) q = '';
+      // 若目前欄位值已是「完整公司名」（精確匹配），視同已選定公司：下拉預設改顯示完整清單
+      const exact = q && names.some(n => n.toLowerCase() === q);
+      if (exact) q = '';
+      let list = names;
+
+      // 排序策略
+      if (q) {
+        // 有輸入：先過濾，再讓「開頭匹配」排前面
+        list = names
+          .filter(n => n.toLowerCase().includes(q))
+          .sort((a, b) => {
+            const aa = a.toLowerCase();
+            const bb = b.toLowerCase();
+            const as = aa.startsWith(q) ? 0 : 1;
+            const bs = bb.startsWith(q) ? 0 : 1;
+            if (as !== bs) return as - bs;
+            return aa.localeCompare(bb, 'zh-Hant');
+          });
+      } else {
+        // 無輸入：釘選優先，其餘依字母排序
+        let settings = null;
+        try { settings = await this.getSettingsSafe(); } catch (_) { settings = null; }
+        const pinned = Array.isArray(settings?.pinnedCompanies) ? settings.pinnedCompanies : [];
+        const pinnedKeys = new Set(pinned.map(x => String(x || '').toLowerCase()));
+
+        const pinnedOrdered = [];
+        for (const p of pinned) {
+          const name = (p || '').toString().trim();
+          if (!name) continue;
+          const key = name.toLowerCase();
+          if (!seen.has(key)) continue; // 不在客戶主檔就不顯示
+          pinnedOrdered.push(name);
+        }
+
+        const rest = names
+          .filter(n => !pinnedKeys.has(n.toLowerCase()))
+          .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'zh-Hant'));
+
+        list = [...pinnedOrdered, ...rest];
+      }
+
+      // 避免清單過長造成操作困難
+      list = list.slice(0, 80);
+      if (!list.length) return;
+
+      const rect = customerEl.getBoundingClientRect();
+      const dd = document.createElement('div');
+      dd.className = 'rt-company-dd';
+      dd.style.left = `${Math.max(8, rect.left)}px`;
+      dd.style.width = `${Math.max(260, rect.width)}px`;
+
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const preferHeight = Math.min(320, list.length * 42 + 16);
+      if (spaceBelow < 180 && rect.top > 220) {
+        const top = Math.max(8, rect.top - preferHeight - 8);
+        dd.style.top = `${top}px`;
+      } else {
+        dd.style.top = `${Math.min(window.innerHeight - 8, rect.bottom + 6)}px`;
+      }
+
+      dd.innerHTML = list.map(name => {
+        const safeText = this.escapeBasic(name);
+        const safeAttr = this.escapeBasic(name);
+        return `<div class="rt-company-item" data-name="${safeAttr}">${safeText}</div>`;
+      }).join('');
+
+      dd.addEventListener('click', (e) => {
+        try {
+          const item = e.target && e.target.closest ? e.target.closest('.rt-company-item') : null;
+          if (!item) return;
+          const name = (item.getAttribute('data-name') || '').toString();
+          if (!name) return;
+          // 套用公司（並自動刷新聯絡人/電話/Email）
+          this.applyCompanyToForm(name);
+          // 觸發 change：讓既有的監聽（例如序號提示）保持一致
+          try { customerEl.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
+          this._closeCompanyDropdown(true);
+          try { customerEl.focus(); } catch (_) {}
+        } catch (_) {
+          this._closeCompanyDropdown(true);
+        }
+      });
+
+      document.body.appendChild(dd);
+      this._companyDropdownEl = dd;
+
+      this._companyDropdownScrollHandler = () => {
+        try { this._closeCompanyDropdown(true); } catch (_) {}
+      };
+      window.addEventListener('scroll', this._companyDropdownScrollHandler, true);
+      window.addEventListener('resize', this._companyDropdownScrollHandler, true);
+
+      this._companyDropdownOutsideHandler = (e) => {
+        try {
+          const t = e && e.target ? e.target : null;
+          const btn = t && t.closest ? t.closest('.input-dropdown-btn[data-dd="company"]') : null;
+          const inside = (this._companyDropdownEl && this._companyDropdownEl.contains(t)) || btn;
+          if (!inside) this._closeCompanyDropdown(true);
+        } catch (_) {
+          this._closeCompanyDropdown(true);
+        }
+      };
+      document.addEventListener('mousedown', this._companyDropdownOutsideHandler, true);
+
+      this._companyDropdownKeyHandler = (e) => {
+        if (e && e.key === 'Escape') this._closeCompanyDropdown(true);
+      };
+      document.addEventListener('keydown', this._companyDropdownKeyHandler, true);
+
+    } catch (e) {
+      console.warn('toggleCompanyDropdown failed:', e);
+      try { this._closeCompanyDropdown(true); } catch (_) {}
+    }
+  }
+
+  static toggleCompanyDropdown(event) {
+    try {
+      const instance = window.repairUI;
+      if (!instance || typeof instance.toggleCompanyDropdown !== 'function') return;
+      return instance.toggleCompanyDropdown(event);
+    } catch (e) {
+      console.warn('RepairUI.toggleCompanyDropdown wrapper failed:', e);
+    }
+  }
+
+  // ========================================
   // 聯絡人下拉（自訂）
   // ========================================
 
@@ -1978,6 +2186,9 @@ ${hint}` : ''}
         event.preventDefault();
         event.stopPropagation();
       }
+
+      // 先關閉公司下拉（避免同時開啟造成遮擋/誤判）
+      try { if (this._companyDropdownEl) this._closeCompanyDropdown(true); } catch (_) {}
 
       // 已開啟 → 關閉
       if (this._contactDropdownEl) {
@@ -2076,7 +2287,7 @@ ${hint}` : ''}
       this._contactDropdownOutsideHandler = (e) => {
         try {
           const t = e && e.target ? e.target : null;
-          const btn = t && t.closest ? t.closest('.input-dropdown-btn') : null;
+          const btn = t && t.closest ? t.closest('.input-dropdown-btn[data-dd="contact"]') : null;
           const inside = (this._contactDropdownEl && (this._contactDropdownEl.contains(t))) || btn;
           if (!inside) this._closeContactDropdown(true);
         } catch (_) {
@@ -3107,7 +3318,7 @@ ${hint}` : ''}
 
     // 確保 CustomerService 已初始化，避免「公司名稱」清單偶發空白
     try {
-      if (window.CustomerService && typeof window.CustomerService.init === 'function' && !window.CustomerService.isInitialized) {
+      if (window.CustomerService && typeof window.CustomerService.init === 'function') {
         await window.CustomerService.init();
       }
     } catch (e) {

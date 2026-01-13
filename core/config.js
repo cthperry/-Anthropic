@@ -8,9 +8,9 @@ const AppConfig = {
   // 版本資訊
   // ========================================
   VERSION: 'V161',
-  VERSION_DATE: '2026-01-13',
+  VERSION_DATE: '2026-01-14',
   VERSION_NAME: 'Modular Phoenix',
-  BUILD_NUMBER: '193',
+  BUILD_NUMBER: '198',
   
   // ========================================
   // Firebase 配置

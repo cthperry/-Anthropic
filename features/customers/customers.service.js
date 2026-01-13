@@ -13,6 +13,11 @@ class CustomerService {
     this.db = null;
     this.customersRef = null;
     this._listenersReady = false;
+
+    // 綁定狀態（避免 uid 尚未就緒就初始化，後續無法重綁導致資料空白）
+    this._boundUid = '';
+    this._boundAuthMode = '';
+    this._initPromise = null;
   }
 
   // ================================
@@ -22,8 +27,48 @@ class CustomerService {
     return (v || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
-  async init() {
-    if (this.isInitialized) {
+
+_getUid() {
+  try {
+    return (window.AppState?.getUid?.() || window.currentUser?.uid || window.AuthSystem?.getCurrentUser?.()?.uid || '').toString().trim();
+  } catch (_) {
+    return (window.currentUser?.uid || '').toString().trim();
+  }
+}
+
+_teardownRealtimeListeners() {
+  try {
+    if (this.customersRef && typeof this.customersRef.off === 'function') this.customersRef.off();
+  } catch (_) { /* ignore */ }
+  this._listenersReady = false;
+}
+
+_bindFirebase(uid) {
+  this.db = firebase.database();
+  const root = this.db.ref('data').child(uid);
+  this._userRootRef = root;
+  this.customersRef = root.child('customers');
+  this.setupRealtimeListeners();
+}
+
+async init(options = {}) {
+  // 支援舊呼叫：init(true) 視為 force
+  const force = (typeof options === 'boolean') ? options : !!options.force;
+
+  // 防止重入：避免同時多處呼叫造成競態
+  if (this._initPromise) return this._initPromise;
+
+  this._initPromise = (async () => {
+    const authMode = (window.AuthSystem?.authMode || 'local').toString();
+    const wantFirebase = (authMode === 'firebase' && typeof firebase !== 'undefined');
+    const uid = this._getUid();
+
+    const needRebind = force
+      || !this.isInitialized
+      || this._boundAuthMode !== authMode
+      || (wantFirebase && uid && this._boundUid !== uid);
+
+    if (this.isInitialized && !needRebind) {
       console.debug('CustomerService already initialized');
       return;
     }
@@ -31,17 +76,22 @@ class CustomerService {
     try {
       console.log('👥 Initializing Customer Service...');
 
-      if (window.AuthSystem.authMode === 'firebase' && typeof firebase !== 'undefined') {
-        this.db = firebase.database();
-        const uid = (window.AppState?.getUid?.() || window.currentUser?.uid || window.AuthSystem?.getCurrentUser?.()?.uid || '').toString();
-        const root = this.db.ref('data').child(uid);
-        this._userRootRef = root;
-        this.customersRef = root.child('customers');
-        this.setupRealtimeListeners();
+      // 清理舊監聽與 ref
+      this._teardownRealtimeListeners();
+      this.db = null;
+      this.customersRef = null;
+
+      // Firebase：只有在 uid 已就緒時才綁定，否則先用 localStorage（避免綁到 data/''）
+      if (wantFirebase && uid) {
+        this._bindFirebase(uid);
       }
 
       await this.loadData();
+
       this.isInitialized = true;
+      this._boundAuthMode = authMode;
+      this._boundUid = wantFirebase ? uid : '';
+
       console.log('✅ Customer Service initialized');
       console.log(`  👥 Loaded ${this.customers.length} customers`);
 
@@ -50,9 +100,17 @@ class CustomerService {
       window.ErrorHandler.log('MEDIUM', 'CustomerService', 'Initialization failed', { error });
       await this.loadFromLocalStorage();
       this.isInitialized = true;
+      this._boundAuthMode = authMode;
+      this._boundUid = '';
     }
-  }
+  })();
 
+  try {
+    return await this._initPromise;
+  } finally {
+    this._initPromise = null;
+  }
+}
   setupRealtimeListeners() {
     if (!this.customersRef) return;
     if (this._listenersReady) return;

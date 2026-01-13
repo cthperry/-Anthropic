@@ -223,15 +223,18 @@ Object.assign(RepairUI.prototype, {
                     <button type="button" class="btn ghost mini" id="btn-history-company">歷史帶入</button>
                   </span>
                 </label>
-                <input
-                  type="text"
-                  name="customer"
-                  class="input"
-                  value="${escapeAttr(repair.customer || '')}"
-                  placeholder="請輸入公司名稱"
-                  list="company-list" oninput="RepairUI.handleCustomerPick(event)" autocomplete="off"
-                  required
-                />
+                <div class="input-with-dropdown">
+                  <input
+                    type="text"
+                    name="customer"
+                    class="input"
+                    value="${escapeAttr(repair.customer || '')}"
+                    placeholder="請輸入公司名稱"
+                    list="company-list" oninput="RepairUI.handleCustomerPick(event)" autocomplete="off"
+                    required
+                  />
+                  <button type="button" class="input-dropdown-btn" data-dd="company" onclick="RepairUI.toggleCompanyDropdown(event)" aria-label="選擇公司" title="選擇公司">▾</button>
+                </div>
                 <datalist id="company-list">${companyOptions}</datalist>
               </div>
               
@@ -246,7 +249,7 @@ Object.assign(RepairUI.prototype, {
                     placeholder="請輸入聯絡人"
                     list="contact-list" oninput="RepairUI.handleContactPick(event)" autocomplete="off"
                   />
-                  <button type="button" class="input-dropdown-btn" onclick="RepairUI.toggleContactDropdown(event)" aria-label="選擇聯絡人" title="選擇聯絡人">▾</button>
+                  <button type="button" class="input-dropdown-btn" data-dd="contact" onclick="RepairUI.toggleContactDropdown(event)" aria-label="選擇聯絡人" title="選擇聯絡人">▾</button>
                 </div>
                 <datalist id="contact-list">${contactOptions}</datalist>
               </div>

@@ -339,6 +339,19 @@
 
 .input-with-dropdown{position:relative;}
 .input-with-dropdown .input{padding-right:46px;}
+
+/*
+  Chrome/Edge（Chromium）在 input[list] 會顯示原生下拉箭頭，
+  但在我們已提供「可點擊按鈕」時，容易造成「箭頭重疊 / 位置偏移」。
+  這裡針對「有自家下拉按鈕」的輸入框，隱藏原生 list indicator。
+*/
+.input-with-dropdown input[list]::-webkit-calendar-picker-indicator{display:none;opacity:0;}
+.input-with-dropdown input[list]::-webkit-list-button{display:none;opacity:0;}
+
+/* 修復：部分瀏覽器在公司名稱（datalist）也會顯示偏下的原生箭頭，直接隱藏避免干擾版面 */
+#repair-form input[list]::-webkit-calendar-picker-indicator{display:none;opacity:0;}
+#repair-form input[list]::-webkit-list-button{display:none;opacity:0;}
+
 .input-with-dropdown .input-dropdown-btn{
   position:absolute;
   right:8px;
@@ -352,7 +365,10 @@
   color:var(--color-text-secondary);
   cursor:pointer;
   font-weight:800;
-  line-height:28px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  line-height:1;
 }
 .input-with-dropdown .input-dropdown-btn:hover{filter:brightness(.98);}
 
@@ -378,6 +394,28 @@
 .rt-contact-dd .rt-contact-item:hover{background:rgba(148,163,184,.16);}
 .rt-contact-dd .rt-contact-item .name{font-size:13px;font-weight:800;color:var(--color-text);}
 .rt-contact-dd .rt-contact-item .meta{font-size:12px;color:var(--color-text-secondary);}
+
+/* 公司下拉（自訂） */
+.rt-company-dd{
+  position:fixed;
+  z-index:10000;
+  background:var(--color-surface);
+  border:1px solid var(--color-border);
+  border-radius:12px;
+  box-shadow:0 18px 40px rgba(15,23,42,.18);
+  padding:6px;
+  overflow:auto;
+  max-height:320px;
+}
+.rt-company-dd .rt-company-item{
+  padding:10px 10px;
+  border-radius:10px;
+  cursor:pointer;
+  font-size:13px;
+  font-weight:800;
+  color:var(--color-text);
+}
+.rt-company-dd .rt-company-item:hover{background:rgba(148,163,184,.16);}
 
 .detail-issue {
   font-size: 16px;
