@@ -6,6 +6,7 @@
 class OrdersUI {
   constructor() {
     this.searchText = '';
+    this.searchDraft = '';
     this.filterStatus = '';
     this.filterOverdue = false;
     this.filterOpenOnly = false;
@@ -37,6 +38,21 @@ class OrdersUI {
     this.filterAmountMin = '';
     this.filterAmountMax = '';
     this.filterSupplier = '';
+
+
+    // 方案2：篩選草稿（輸入不立即套用；按【搜尋】才套用）
+    this.filterStatusDraft = this.filterStatus;
+    this.filterOverdueDraft = this.filterOverdue;
+    this.filterOpenOnlyDraft = this.filterOpenOnly;
+    this.sortKeyDraft = this.sortKey;
+    this.filterOrderedFromDraft = this.filterOrderedFrom;
+    this.filterOrderedToDraft = this.filterOrderedTo;
+    this.filterExpectedFromDraft = this.filterExpectedFrom;
+    this.filterExpectedToDraft = this.filterExpectedTo;
+    this.filterAmountMinDraft = this.filterAmountMin;
+    this.filterAmountMaxDraft = this.filterAmountMax;
+    this.filterSupplierDraft = this.filterSupplier;
+    this.searchDraft = this.searchText;
   }
 
   _todayTaipei() {
@@ -143,6 +159,61 @@ class OrdersUI {
     return { accent: 'var(--module-accent)', soft: 'var(--module-accent-soft)' };
   }
 
+  _scheduleUpdate() {
+    if (this._updateScheduled) return;
+    this._updateScheduled = true;
+    requestAnimationFrame(() => {
+      this._updateScheduled = false;
+      try { this.update(); } catch (_) {}
+    });
+  }
+
+  applyFilters() {
+    this.searchText = (this.searchDraft || '').toString().trim();
+    this.filterStatus = (this.filterStatusDraft || '').toString().trim();
+    this.filterOverdue = !!this.filterOverdueDraft;
+    this.filterOpenOnly = !!this.filterOpenOnlyDraft;
+    this.sortKey = (this.sortKeyDraft || 'updatedAt_desc').toString().trim() || 'updatedAt_desc';
+    this.filterOrderedFrom = (this.filterOrderedFromDraft || '').toString();
+    this.filterOrderedTo = (this.filterOrderedToDraft || '').toString();
+    this.filterExpectedFrom = (this.filterExpectedFromDraft || '').toString();
+    this.filterExpectedTo = (this.filterExpectedToDraft || '').toString();
+    this.filterAmountMin = (this.filterAmountMinDraft || '').toString();
+    this.filterAmountMax = (this.filterAmountMaxDraft || '').toString();
+    this.filterSupplier = (this.filterSupplierDraft || '').toString();
+
+    this._scheduleUpdate();
+  }
+
+  clearAll() {
+    this.searchText = '';
+    this.searchDraft = '';
+    this.filterStatus = '';
+    this.filterStatusDraft = '';
+    this.filterOverdue = false;
+    this.filterOverdueDraft = false;
+    this.filterOpenOnly = false;
+    this.filterOpenOnlyDraft = false;
+    this.sortKey = 'updatedAt_desc';
+    this.sortKeyDraft = 'updatedAt_desc';
+    this.filterOrderedFrom = '';
+    this.filterOrderedFromDraft = '';
+    this.filterOrderedTo = '';
+    this.filterOrderedToDraft = '';
+    this.filterExpectedFrom = '';
+    this.filterExpectedFromDraft = '';
+    this.filterExpectedTo = '';
+    this.filterExpectedToDraft = '';
+    this.filterAmountMin = '';
+    this.filterAmountMinDraft = '';
+    this.filterAmountMax = '';
+    this.filterAmountMaxDraft = '';
+    this.filterSupplier = '';
+    this.filterSupplierDraft = '';
+    this._scheduleUpdate();
+  }
+
+
   render(containerId) {
     const el = document.getElementById(containerId);
     if (!el) return;
@@ -158,8 +229,10 @@ class OrdersUI {
           </div>
           <div class="module-toolbar-right">
             <div class="orders-search">
-              <input class="input" type="text" placeholder="搜尋：訂單號 / 客戶 / 供應商 / 狀態" value="${this._escapeAttr(this.searchText)}" oninput="OrdersUI.onSearch(event)" />
+              <input class="input" type="text" placeholder="搜尋：訂單號 / 客戶 / 供應商 / 狀態" value="${this._escapeAttr(this.searchDraft)}" oninput="OrdersUI.onSearchDraft(event)" />
             </div>
+            <button class="btn primary" onclick="OrdersUI.applyFilters()">🔍 搜尋</button>
+            <button class="btn" onclick="OrdersUI.clearAll()">🧹 清除</button>
             <button class="btn primary" onclick="OrdersUI.openCreateFromQuote()">從報價建立</button>
           </div>
         </div>
@@ -257,13 +330,13 @@ class OrdersUI {
     if (!host) return;
     const statuses = (AppConfig?.business?.orderStatus || []).map(s => s.value);
 
-    const orderedFrom = this._escapeAttr(this.filterOrderedFrom || '');
-    const orderedTo = this._escapeAttr(this.filterOrderedTo || '');
-    const expectedFrom = this._escapeAttr(this.filterExpectedFrom || '');
-    const expectedTo = this._escapeAttr(this.filterExpectedTo || '');
-    const minAmt = this._escapeAttr(this.filterAmountMin || '');
-    const maxAmt = this._escapeAttr(this.filterAmountMax || '');
-    const supplier = this._escapeAttr(this.filterSupplier || '');
+    const orderedFrom = this._escapeAttr(this.filterOrderedFromDraft || '');
+    const orderedTo = this._escapeAttr(this.filterOrderedToDraft || '');
+    const expectedFrom = this._escapeAttr(this.filterExpectedFromDraft || '');
+    const expectedTo = this._escapeAttr(this.filterExpectedToDraft || '');
+    const minAmt = this._escapeAttr(this.filterAmountMinDraft || '');
+    const maxAmt = this._escapeAttr(this.filterAmountMaxDraft || '');
+    const supplier = this._escapeAttr(this.filterSupplierDraft || '');
 
     host.innerHTML = `
       <div class="orders-filters-inner">
@@ -281,7 +354,8 @@ class OrdersUI {
 
           <div class="orders-filters-actions" aria-label="篩選操作">
             <button class="btn sm" onclick="OrdersUI.toggleAdvancedFilters()">${this.filtersOpen ? '收合' : '展開'} 篩選</button>
-            <button class="btn sm ghost" onclick="OrdersUI.clearAdvancedFilters()" title="清除所有篩選">清除</button>
+            <button class="btn sm primary" onclick="OrdersUI.applyFilters()">🔍 搜尋</button>
+            <button class="btn sm ghost" onclick="OrdersUI.clearAll()" title="清除所有條件">清除</button>
           </div>
         </div>
 
@@ -290,18 +364,18 @@ class OrdersUI {
             <div class="filter-group">
               <label class="form-label">狀態（詳細）</label>
               <select class="input" id="orders-filter-status" onchange="OrdersUI.setStatusFilter(event)">
-                <option value="" ${this.filterStatus ? '' : 'selected'}>全部</option>
-                ${statuses.map(v => `<option value="${this._escapeAttr(v)}" ${this.filterStatus === v ? 'selected' : ''}>${this._escapeHtml(v)}</option>`).join('')}
+                <option value="" ${(this.filterStatusDraft || "").toString().trim() ? "" : "selected"}>全部</option>
+                ${statuses.map(v => `<option value="${this._escapeAttr(v)}" ${this.filterStatusDraft === v ? 'selected' : ''}>${this._escapeHtml(v)}</option>`).join('')}
               </select>
             </div>
 
             <div class="filter-group">
               <label class="form-label">排序</label>
               <select class="input" id="orders-filter-sort" onchange="OrdersUI.setSort(event)">
-                <option value="updatedAt_desc" ${this.sortKey === 'updatedAt_desc' ? 'selected' : ''}>最近更新</option>
-                <option value="orderedAt_desc" ${this.sortKey === 'orderedAt_desc' ? 'selected' : ''}>下單日（新→舊）</option>
-                <option value="expectedAt_asc" ${this.sortKey === 'expectedAt_asc' ? 'selected' : ''}>預計到貨（近→遠）</option>
-                <option value="totalAmount_desc" ${this.sortKey === 'totalAmount_desc' ? 'selected' : ''}>金額（高→低）</option>
+                <option value="updatedAt_desc" ${this.sortKeyDraft === 'updatedAt_desc' ? 'selected' : ''}>最近更新</option>
+                <option value="orderedAt_desc" ${this.sortKeyDraft === 'orderedAt_desc' ? 'selected' : ''}>下單日（新→舊）</option>
+                <option value="expectedAt_asc" ${this.sortKeyDraft === 'expectedAt_asc' ? 'selected' : ''}>預計到貨（近→遠）</option>
+                <option value="totalAmount_desc" ${this.sortKeyDraft === 'totalAmount_desc' ? 'selected' : ''}>金額（高→低）</option>
               </select>
             </div>
           </div>
@@ -1013,46 +1087,58 @@ if (typeof window !== 'undefined') {
 }
 
 Object.assign(OrdersUI, {
-  onSearch(event) {
-    const value = (event.target.value || '').trim();
-    clearTimeout(window.ordersUI.searchDebounce);
-    window.ordersUI.searchDebounce = setTimeout(() => {
-      window.ordersUI.searchText = value;
-      window.ordersUI.update();
-    }, 300);
+  onSearchDraft(event) {
+    const value = (event?.target?.value || '').toString();
+    window.ordersUI.searchDraft = value;
+  },
+
+  applyFilters() {
+    const ui = window.ordersUI;
+    if (!ui) return;
+    ui.applyFilters();
+  },
+
+  clearAll() {
+    const ui = window.ordersUI;
+    if (!ui) return;
+    ui.clearAll();
   },
 
   setStatusFilter(event) {
-    window.ordersUI.filterStatus = (event.target.value || '').trim();
-    window.ordersUI.filterOverdue = false;
-    window.ordersUI.filterOpenOnly = false;
-    window.ordersUI.update();
+    const ui = window.ordersUI;
+    if (!ui) return;
+    ui.filterStatusDraft = (event?.target?.value || '').toString().trim();
+    ui.filterOverdueDraft = false;
+    ui.filterOpenOnlyDraft = false;
   },
 
   setQuickFilter(key) {
+    const ui = window.ordersUI;
+    if (!ui) return;
     const k = (key || '').toString().trim();
-
-    if (k === 'OVERDUE') {
-      window.ordersUI.filterOverdue = true;
-      window.ordersUI.filterOpenOnly = false;
-      window.ordersUI.filterStatus = '';
-      window.ordersUI.update();
-      return;
+    if (!k) {
+      ui.filterStatus = '';
+      ui.filterOverdue = false;
+      ui.filterOpenOnly = false;
+    } else if (k === 'OVERDUE') {
+      ui.filterStatus = '';
+      ui.filterOverdue = true;
+      ui.filterOpenOnly = false;
+    } else if (k === 'OPEN') {
+      ui.filterStatus = '';
+      ui.filterOverdue = false;
+      ui.filterOpenOnly = true;
+    } else {
+      ui.filterStatus = k;
+      ui.filterOverdue = false;
+      ui.filterOpenOnly = false;
     }
+    // chips 即時套用，同步草稿
+    ui.filterStatusDraft = ui.filterStatus;
+    ui.filterOverdueDraft = ui.filterOverdue;
+    ui.filterOpenOnlyDraft = ui.filterOpenOnly;
 
-    if (k === 'OPEN') {
-      window.ordersUI.filterOverdue = false;
-      window.ordersUI.filterOpenOnly = true;
-      window.ordersUI.filterStatus = '';
-      window.ordersUI.update();
-      return;
-    }
-
-    // 指定狀態或全部
-    window.ordersUI.filterOverdue = false;
-    window.ordersUI.filterOpenOnly = false;
-    window.ordersUI.filterStatus = k;
-    window.ordersUI.update();
+    ui._scheduleUpdate();
   },
 
   toggleAdvancedFilters() {
@@ -1066,22 +1152,21 @@ Object.assign(OrdersUI, {
   applyAdvancedFilters() {
     const ui = window.ordersUI;
     if (!ui) return;
-    const orderedFromEl = document.getElementById('orders-filter-ordered-from');
-    const orderedToEl = document.getElementById('orders-filter-ordered-to');
-    const expectedFromEl = document.getElementById('orders-filter-expected-from');
-    const expectedToEl = document.getElementById('orders-filter-expected-to');
+    const ofEl = document.getElementById('orders-filter-ordered-from');
+    const otEl = document.getElementById('orders-filter-ordered-to');
+    const efEl = document.getElementById('orders-filter-expected-from');
+    const etEl = document.getElementById('orders-filter-expected-to');
     const minEl = document.getElementById('orders-filter-amount-min');
     const maxEl = document.getElementById('orders-filter-amount-max');
-    const supplierEl = document.getElementById('orders-filter-supplier');
+    const supEl = document.getElementById('orders-filter-supplier');
 
-    ui.filterOrderedFrom = (orderedFromEl ? orderedFromEl.value : ui.filterOrderedFrom) || '';
-    ui.filterOrderedTo = (orderedToEl ? orderedToEl.value : ui.filterOrderedTo) || '';
-    ui.filterExpectedFrom = (expectedFromEl ? expectedFromEl.value : ui.filterExpectedFrom) || '';
-    ui.filterExpectedTo = (expectedToEl ? expectedToEl.value : ui.filterExpectedTo) || '';
-    ui.filterAmountMin = (minEl ? minEl.value : ui.filterAmountMin) || '';
-    ui.filterAmountMax = (maxEl ? maxEl.value : ui.filterAmountMax) || '';
-    ui.filterSupplier = (supplierEl ? supplierEl.value : ui.filterSupplier) || '';
-    ui.update();
+    ui.filterOrderedFromDraft = (ofEl ? ofEl.value : ui.filterOrderedFromDraft) || '';
+    ui.filterOrderedToDraft = (otEl ? otEl.value : ui.filterOrderedToDraft) || '';
+    ui.filterExpectedFromDraft = (efEl ? efEl.value : ui.filterExpectedFromDraft) || '';
+    ui.filterExpectedToDraft = (etEl ? etEl.value : ui.filterExpectedToDraft) || '';
+    ui.filterAmountMinDraft = (minEl ? minEl.value : ui.filterAmountMinDraft) || '';
+    ui.filterAmountMaxDraft = (maxEl ? maxEl.value : ui.filterAmountMaxDraft) || '';
+    ui.filterSupplierDraft = (supEl ? supEl.value : ui.filterSupplierDraft) || '';
   },
 
   clearAdvancedFilters() {
@@ -1101,8 +1186,9 @@ Object.assign(OrdersUI, {
   },
 
   setSort(event) {
-    window.ordersUI.sortKey = (event.target.value || 'updatedAt_desc').toString();
-    window.ordersUI.update();
+    const ui = window.ordersUI;
+    if (!ui) return;
+    ui.sortKeyDraft = (event?.target?.value || 'updatedAt_desc').toString().trim() || 'updatedAt_desc';
   },
 
   loadMore() {

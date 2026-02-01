@@ -70,7 +70,9 @@
     constructor(){
       this.tab = 'dashboard';
       this.searchEquip = '';
+    this.searchEquipDraft = '';
       this.searchRecord = '';
+    this.searchRecordDraft = '';
       this.filterEquipmentId = '';
       this.filterFrom = '';
       this.filterTo = '';
@@ -486,7 +488,9 @@
               <div class="muted">設備編號／週期設定／模板（Checklist）</div>
             </div>
             <div class="panel-right">
-              <input class="input" style="max-width:360px" placeholder="搜尋：設備編號/名稱/型號/位置/負責人" value="${esc(this.searchEquip)}" oninput="MaintenanceUI._setEquipSearch(event)" />
+              <input class="input" style="max-width:360px" placeholder="搜尋：設備編號/名稱/型號/位置/負責人" value="${esc(this.searchEquipDraft)}" oninput="MaintenanceUI._setEquipSearch(event)" />
+              <button class="btn sm primary" onclick="MaintenanceUI.applyEquipSearch()">🔍 搜尋</button>
+              <button class="btn sm ghost" onclick="MaintenanceUI.clearEquipSearch()">清除</button>
               <button class="btn ghost" onclick="MaintenanceUI.clearEquipSearch()">清除</button>
             </div>
           </div>
@@ -497,15 +501,9 @@
         </div>
       `;
     }
-
-    _setEquipSearch(ev){
-      this.searchEquip = toStr(ev?.target?.value);
-      try { if (this._equipSearchTimer) clearTimeout(this._equipSearchTimer); } catch (_) {}
-      this._equipSearchTimer = setTimeout(() => {
-        this._equipSearchTimer = null;
-        this._renderBody();
-      }, 300);
-    }
+  _setEquipSearch(ev) {
+    this.searchEquipDraft = (ev?.target?.value || '').toString();
+  }
 
     clearEquipSearch(){
       this.searchEquip = '';
@@ -579,7 +577,9 @@
               <select class="input" style="max-width:320px" onchange="MaintenanceUI._setRecEq(event)">${eqOptions}</select>
               <input class="input" type="date" style="max-width:180px" value="${esc(from)}" onchange="MaintenanceUI._setRecFrom(event)" />
               <input class="input" type="date" style="max-width:180px" value="${esc(to)}" onchange="MaintenanceUI._setRecTo(event)" />
-              <input class="input" style="max-width:240px" placeholder="搜尋：關鍵字" value="${esc(this.searchRecord)}" oninput="MaintenanceUI._setRecSearch(event)" />
+              <input class="input" style="max-width:240px" placeholder="搜尋：關鍵字" value="${esc(this.searchRecordDraft)}" oninput="MaintenanceUI._setRecSearch(event)" />
+              <button class="btn sm primary" onclick="MaintenanceUI.applyRecSearch()">🔍 搜尋</button>
+              <button class="btn sm ghost" onclick="MaintenanceUI.clearRecSearch()">清除</button>
               <button class="btn" onclick="MaintenanceUI.openCreateRecord()">＋ 新增</button>
               <button class="btn ghost" onclick="MaintenanceUI.clearRecordFilters()">清除</button>
             </div>
@@ -595,14 +595,32 @@
     _setRecEq(ev){ this.filterEquipmentId = toStr(ev?.target?.value); this._renderBody(); }
     _setRecFrom(ev){ this.filterFrom = toStr(ev?.target?.value); this._renderBody(); }
     _setRecTo(ev){ this.filterTo = toStr(ev?.target?.value); this._renderBody(); }
-    _setRecSearch(ev){
-      this.searchRecord = toStr(ev?.target?.value);
-      try { if (this._recSearchTimer) clearTimeout(this._recSearchTimer); } catch (_) {}
-      this._recSearchTimer = setTimeout(() => {
-        this._recSearchTimer = null;
-        this._renderBody();
-      }, 300);
-    }
+  _setRecSearch(ev) {
+    this.searchRecordDraft = (ev?.target?.value || '').toString();
+  }
+
+  applyEquipSearch() {
+    this.searchEquip = (this.searchEquipDraft || '').toString().trim();
+    this._renderBody();
+  }
+
+  clearEquipSearch() {
+    this.searchEquip = '';
+    this.searchEquipDraft = '';
+    this._renderBody();
+  }
+
+  applyRecSearch() {
+    this.searchRecord = (this.searchRecordDraft || '').toString().trim();
+    this._renderBody();
+  }
+
+  clearRecSearch() {
+    this.searchRecord = '';
+    this.searchRecordDraft = '';
+    this._renderBody();
+  }
+
 
     clearRecordFilters(){
       this.searchRecord = '';
@@ -1556,6 +1574,7 @@
     openCreateEquipment: (prefill) => maintenanceUI.openCreateEquipment(prefill),
     openEditEquipment: (id) => maintenanceUI.openEditEquipment(id),
     removeEquipment: (id) => maintenanceUI.removeEquipment(id),
+    applyEquipSearch: () => maintenanceUI.applyEquipSearch(),
     clearEquipSearch: () => maintenanceUI.clearEquipSearch(),
     _setEquipSearch: (e) => maintenanceUI._setEquipSearch(e),
 
@@ -1568,6 +1587,8 @@
     _setRecEq: (e) => maintenanceUI._setRecEq(e),
     _setRecFrom: (e) => maintenanceUI._setRecFrom(e),
     _setRecTo: (e) => maintenanceUI._setRecTo(e),
+    applyRecSearch: () => maintenanceUI.applyRecSearch(),
+    clearRecSearch: () => maintenanceUI.clearRecSearch(),
     _setRecSearch: (e) => maintenanceUI._setRecSearch(e),
     clearRecordFilters: () => maintenanceUI.clearRecordFilters(),
 

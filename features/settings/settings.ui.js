@@ -331,6 +331,8 @@ class SettingsUI {
                   <option value="missing">缺少 profile</option>
                 </select>
                 <input class="input" id="ua-filter" placeholder="搜尋 email / 顯示名稱" />
+                <button class="btn sm primary" id="ua-apply" type="button">🔍 搜尋</button>
+                <button class="btn sm" id="ua-clear" type="button">🧹 清除</button>
                 <button class="btn" type="button" id="ua-toggle-create">＋ 新增使用者</button>
               </div>
             </div>
@@ -647,6 +649,8 @@ class SettingsUI {
     const seedBtn = document.getElementById('ua-seed');
     const tbody = document.getElementById('ua-tbody');
     const filterInput = document.getElementById('ua-filter');
+    const applyBtn = document.getElementById('ua-apply');
+    const clearBtn = document.getElementById('ua-clear');
     const statusSel = document.getElementById('ua-status-filter');
     const toggleCreateBtn = document.getElementById('ua-toggle-create');
     const createBar = document.getElementById('ua-createbar');
@@ -658,22 +662,26 @@ class SettingsUI {
     const createCancel = document.getElementById('ua-create-cancel');
 
     if (!tbody) return;
+    const applyNow = () => {
+      try { this.renderUserAdminTbody(); } catch (_) {}
+    };
+
+    if (applyBtn) applyBtn.addEventListener('click', applyNow);
 
     if (filterInput) {
-      filterInput.addEventListener('input', () => {
-        try { if (this._uaFilterTimer) clearTimeout(this._uaFilterTimer); } catch (_) {}
-        this._uaFilterTimer = setTimeout(() => {
-          this._uaFilterTimer = null;
-          try { this.renderUserAdminTbody(); } catch (_) {}
-        }, 300);
+      filterInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') applyNow();
       });
     }
 
-    if (statusSel) {
-      statusSel.addEventListener('change', () => {
-        try { this.renderUserAdminTbody(); } catch (_) {}
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        try { if (filterInput) filterInput.value = ''; } catch (_) {}
+        try { if (statusSel) statusSel.value = 'all'; } catch (_) {}
+        applyNow();
       });
     }
+
 
     const setCreateOpen = (open) => {
       if (!createBar || !createHint || !toggleCreateBtn) return;

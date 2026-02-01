@@ -7,6 +7,7 @@ class KBUI {
   constructor(){
     this.type = 'faq'; // faq | failure | sop | case
     this.searchText = '';
+    this.searchDraft = '';
     this.selectedTags = new Set();
     this._renderedContainerId = '';
 
@@ -34,6 +35,18 @@ class KBUI {
     return (typeof window._svc === 'function') ? window._svc('KBService') : window.KBService;
   }
 
+  applyFilters() {
+    this.searchText = (this.searchDraft || '').toString().trim();
+    this.updateList();
+  }
+
+  clearSearch() {
+    this.searchText = '';
+    this.searchDraft = '';
+    this.updateList();
+  }
+
+
   render(containerId = 'main-content'){
     this._renderedContainerId = containerId;
     const host = document.getElementById(containerId);
@@ -48,7 +61,9 @@ class KBUI {
             <div class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">FAQ / 故障模式 / SOP / 案例</div>
           </div>
           <div class="module-toolbar-right">
-            <input id="kb-search" class="input" style="max-width:360px" placeholder="搜尋：關鍵字 / Tag / 設備 / 料號..." oninput="KBUI.handleSearch(event)" />
+            <input id="kb-search" class="input" style="max-width:360px" placeholder="搜尋：關鍵字 / Tag / 設備 / 料號..." value="${this._escape(this.searchDraft || '')}" oninput="KBUI.onSearchDraft(event)" />
+            <button class="btn" onclick="KBUI.applyFilters()">🔍 搜尋</button>
+            <button class="btn" onclick="KBUI.clearSearch()">🧹 清除</button>
             <button class="btn primary" onclick="KBUI.openCreate()">＋ 新增</button>
           </div>
         </div>
@@ -125,14 +140,9 @@ class KBUI {
     this._renderTagChips();
     this.updateList();
   }
-
-  handleSearch(ev){
+  handleSearch(ev) {
     const v = (ev?.target?.value || '').toString();
-    clearTimeout(this.searchDebounce);
-    this.searchDebounce = setTimeout(() => {
-      this.searchText = v;
-      this.updateList();
-    }, 300);
+    this.searchDraft = v;
   }
 
   toggleTag(tag){
@@ -563,8 +573,16 @@ Object.assign(KBUI, {
     try { window.kbUI?.setType?.(t); } catch (e) { console.error(e); }
   },
 
-  handleSearch(ev) {
+  onSearchDraft(ev) {
     try { window.kbUI?.handleSearch?.(ev); } catch (e) { console.error(e); }
+  },
+
+  applyFilters() {
+    try { window.kbUI?.applyFilters?.(); } catch (e) { console.error(e); }
+  },
+
+  clearSearch() {
+    try { window.kbUI?.clearSearch?.(); } catch (e) { console.error(e); }
   },
 
   toggleTag(tag) {

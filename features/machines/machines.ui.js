@@ -28,12 +28,15 @@ const escapeJsString = function(input){
 class MachinesUI {
   constructor() {
     this.query = '';
+    this.queryDraft = '';
     this.selectedSerial = '';
   }
 
   render(containerId = 'main-content') {
     const container = document.getElementById(containerId);
     if (!container) return;
+
+    this.queryDraft = this.query;
 
     container.innerHTML = `
       <div class="machines-module">
@@ -56,9 +59,13 @@ class MachinesUI {
                 class="input"
                 id="machines-serial-query"
                 placeholder="搜尋序號（支援模糊搜尋）"
-                value="${escapeHtml(this.query)}"
-                oninput="MachinesUI.onQueryChange(this.value)"
+                value="${escapeHtml(this.queryDraft)}"
+                oninput="MachinesUI.onQueryDraftChange(this.value)"
               />
+            </div>
+            <div class="machine-panel-actions" style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line, rgba(255,255,255,0.08));">
+              <button class="btn sm primary" onclick="MachinesUI.applyQuery()">🔍 搜尋</button>
+              <button class="btn sm" onclick="MachinesUI.clearQuery()">🧹 清除</button>
             </div>
             <div class="serial-list" id="machines-serial-list"></div>
           </div>
@@ -73,6 +80,22 @@ class MachinesUI {
     this.renderSerialList();
     this.renderDetail();
   }
+
+  applyQuery() {
+    this.query = (this.queryDraft || '').toString().trim();
+    this.renderSerialList();
+  }
+
+  clearQuery() {
+    this.query = '';
+    this.queryDraft = '';
+    try {
+      const el = document.getElementById('machines-serial-query');
+      if (el) el.value = '';
+    } catch (_) {}
+    this.renderSerialList();
+  }
+
 
   getAllRepairsWithSerial() {
     const all = ((window._svc ? window._svc('RepairService') : window.RepairService) && typeof (window._svc ? window._svc('RepairService') : window.RepairService).getAll === 'function')
@@ -643,14 +666,9 @@ class MachinesUI {
       await window.AppRouter.navigate('maintenance');
     }
   }
-
   onQueryChange(value) {
-    this.query = (value || '').toString();
-    try { if (this._queryTimer) clearTimeout(this._queryTimer); } catch (_) {}
-    this._queryTimer = setTimeout(() => {
-      this._queryTimer = null;
-      this.renderSerialList();
-    }, 300);
+    // 相容舊呼叫：改為只更新草稿，不立即套用
+    this.queryDraft = (value || '').toString();
   }
 
   selectSerial(serial) {
@@ -703,8 +721,16 @@ class MachinesUI {
     window.machinesUI.render(containerId);
   }
 
-  static onQueryChange(value) {
-    window.machinesUI?.onQueryChange(value);
+  static onQueryDraftChange(value) {
+    try { window.machinesUI?.onQueryChange?.(value); } catch (_) {}
+  }
+
+  static applyQuery() {
+    try { window.machinesUI?.applyQuery?.(); } catch (_) {}
+  }
+
+  static clearQuery() {
+    try { window.machinesUI?.clearQuery?.(); } catch (_) {}
   }
 
   static selectSerial(serial) {

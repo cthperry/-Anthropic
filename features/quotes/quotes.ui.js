@@ -6,6 +6,7 @@
 class QuotesUI {
   constructor() {
     this.searchText = '';
+    this.searchDraft = '';
     this.filterStatus = '';
     this.filterPendingOnly = false;
     this.sortKey = 'updatedAt_desc';
@@ -129,6 +130,49 @@ class QuotesUI {
     return { accent: 'var(--module-accent)', soft: 'var(--module-accent-soft)' };
   }
 
+  _scheduleUpdate() {
+    if (this._updateScheduled) return;
+    this._updateScheduled = true;
+    requestAnimationFrame(() => {
+      this._updateScheduled = false;
+      try { this.update(); } catch (_) {}
+    });
+  }
+
+  applyFilters() {
+    this.searchText = (this.searchDraft || '').toString().trim();
+    this.filterStatus = (this.filterStatusDraft || '').toString().trim();
+    this.filterPendingOnly = !!this.filterPendingOnlyDraft;
+    this.sortKey = (this.sortKeyDraft || 'updatedAt_desc').toString().trim() || 'updatedAt_desc';
+    this.filterDateFrom = (this.filterDateFromDraft || '').toString();
+    this.filterDateTo = (this.filterDateToDraft || '').toString();
+    this.filterAmountMin = (this.filterAmountMinDraft || '').toString();
+    this.filterAmountMax = (this.filterAmountMaxDraft || '').toString();
+
+    this._scheduleUpdate();
+  }
+
+  clearAll() {
+    this.searchText = '';
+    this.searchDraft = '';
+    this.filterStatus = '';
+    this.filterStatusDraft = '';
+    this.filterPendingOnly = false;
+    this.filterPendingOnlyDraft = false;
+    this.sortKey = 'updatedAt_desc';
+    this.sortKeyDraft = 'updatedAt_desc';
+    this.filterDateFrom = '';
+    this.filterDateFromDraft = '';
+    this.filterDateTo = '';
+    this.filterDateToDraft = '';
+    this.filterAmountMin = '';
+    this.filterAmountMinDraft = '';
+    this.filterAmountMax = '';
+    this.filterAmountMaxDraft = '';
+    this._scheduleUpdate();
+  }
+
+
   render(containerId) {
     const el = document.getElementById(containerId);
     if (!el) return;
@@ -144,8 +188,10 @@ class QuotesUI {
           </div>
           <div class="module-toolbar-right">
             <div class="quotes-search">
-              <input class="input" type="text" placeholder="搜尋：報價單號 / 客戶 / 狀態" value="${this._escapeAttr(this.searchText)}" oninput="QuotesUI.onSearch(event)" />
+              <input class="input" type="text" placeholder="搜尋：報價單號 / 客戶 / 狀態" value="${this._escapeAttr(this.searchDraft)}" oninput="QuotesUI.onSearchDraft(event)" />
             </div>
+            <button class="btn primary" onclick="QuotesUI.applyFilters()">🔍 搜尋</button>
+            <button class="btn" onclick="QuotesUI.clearAll()">🧹 清除</button>
             <button class="btn primary" onclick="QuotesUI.openCreateFromRepair()">從維修單建立</button>
           </div>
         </div>
@@ -240,10 +286,10 @@ class QuotesUI {
     if (!host) return;
     const statuses = (AppConfig?.business?.quoteStatus || []).map(s => s.value);
 
-    const from = this._escapeAttr(this.filterDateFrom || '');
-    const to = this._escapeAttr(this.filterDateTo || '');
-    const minAmt = this._escapeAttr(this.filterAmountMin || '');
-    const maxAmt = this._escapeAttr(this.filterAmountMax || '');
+    const from = this._escapeAttr(this.filterDateFromDraft || '');
+    const to = this._escapeAttr(this.filterDateToDraft || '');
+    const minAmt = this._escapeAttr(this.filterAmountMinDraft || '');
+    const maxAmt = this._escapeAttr(this.filterAmountMaxDraft || '');
 
     host.innerHTML = `
       <div class="quotes-filters-inner">
@@ -260,7 +306,8 @@ class QuotesUI {
 
           <div class="quotes-filters-actions" aria-label="篩選操作">
             <button class="btn sm" onclick="QuotesUI.toggleAdvancedFilters()">${this.filtersOpen ? '收合' : '展開'} 篩選</button>
-            <button class="btn sm ghost" onclick="QuotesUI.clearAdvancedFilters()" title="清除所有篩選">清除</button>
+            <button class="btn sm primary" onclick="QuotesUI.applyFilters()">🔍 搜尋</button>
+            <button class="btn sm ghost" onclick="QuotesUI.clearAll()" title="清除所有條件">清除</button>
           </div>
         </div>
 
@@ -269,18 +316,18 @@ class QuotesUI {
             <div class="filter-group">
               <label class="form-label">狀態（詳細）</label>
               <select class="input" id="quotes-filter-status" onchange="QuotesUI.setStatusFilter(event)">
-                <option value="" ${this.filterStatus ? '' : 'selected'}>全部</option>
-                ${statuses.map(v => `<option value="${this._escapeAttr(v)}" ${this.filterStatus === v ? 'selected' : ''}>${this._escapeHtml(v)}</option>`).join('')}
+                <option value="" ${(this.filterStatusDraft || "").toString().trim() ? "" : "selected"}>全部</option>
+                ${statuses.map(v => `<option value="${this._escapeAttr(v)}" ${this.filterStatusDraft === v ? 'selected' : ''}>${this._escapeHtml(v)}</option>`).join('')}
               </select>
             </div>
 
             <div class="filter-group">
               <label class="form-label">排序</label>
               <select class="input" id="quotes-filter-sort" onchange="QuotesUI.setSort(event)">
-                <option value="updatedAt_desc" ${this.sortKey === 'updatedAt_desc' ? 'selected' : ''}>最近更新</option>
-                <option value="createdAt_desc" ${this.sortKey === 'createdAt_desc' ? 'selected' : ''}>建立日（新→舊）</option>
-                <option value="totalAmount_desc" ${this.sortKey === 'totalAmount_desc' ? 'selected' : ''}>金額（高→低）</option>
-                <option value="quoteNo_desc" ${this.sortKey === 'quoteNo_desc' ? 'selected' : ''}>報價單號（新→舊）</option>
+                <option value="updatedAt_desc" ${this.sortKeyDraft === 'updatedAt_desc' ? 'selected' : ''}>最近更新</option>
+                <option value="createdAt_desc" ${this.sortKeyDraft === 'createdAt_desc' ? 'selected' : ''}>建立日（新→舊）</option>
+                <option value="totalAmount_desc" ${this.sortKeyDraft === 'totalAmount_desc' ? 'selected' : ''}>金額（高→低）</option>
+                <option value="quoteNo_desc" ${this.sortKeyDraft === 'quoteNo_desc' ? 'selected' : ''}>報價單號（新→舊）</option>
               </select>
             </div>
           </div>
@@ -1021,13 +1068,21 @@ if (typeof window !== 'undefined') {
 }
 
 Object.assign(QuotesUI, {
-  onSearch(event) {
-    const value = (event.target.value || '').trim();
-    clearTimeout(window.quotesUI.searchDebounce);
-    window.quotesUI.searchDebounce = setTimeout(() => {
-      window.quotesUI.searchText = value;
-      window.quotesUI.update();
-    }, 300);
+  onSearchDraft(event) {
+    const value = (event?.target?.value || '').toString();
+    window.quotesUI.searchDraft = value;
+  },
+
+  applyFilters() {
+    const ui = window.quotesUI;
+    if (!ui) return;
+    ui.applyFilters();
+  },
+
+  clearAll() {
+    const ui = window.quotesUI;
+    if (!ui) return;
+    ui.clearAll();
   },
 
   onMoneyFocus(event) {
@@ -1045,31 +1100,38 @@ Object.assign(QuotesUI, {
     } catch (_) {}
   },
 
-
   setStatusFilter(event) {
-    window.quotesUI.filterStatus = (event.target.value || '').trim();
-    window.quotesUI.filterPendingOnly = false;
-    window.quotesUI.update();
+    const ui = window.quotesUI;
+    if (!ui) return;
+    ui.filterStatusDraft = (event?.target?.value || '').toString().trim();
+    ui.filterPendingOnlyDraft = false;
   },
 
   setSort(event) {
-    window.quotesUI.sortKey = (event.target.value || 'updatedAt_desc').trim();
-    window.quotesUI.update();
+    const ui = window.quotesUI;
+    if (!ui) return;
+    ui.sortKeyDraft = (event?.target?.value || 'updatedAt_desc').toString().trim() || 'updatedAt_desc';
   },
 
   setQuickFilter(key) {
+    const ui = window.quotesUI;
+    if (!ui) return;
     const k = (key || '').toString().trim();
     if (!k) {
-      window.quotesUI.filterStatus = '';
-      window.quotesUI.filterPendingOnly = false;
+      ui.filterStatus = '';
+      ui.filterPendingOnly = false;
     } else if (k === 'PENDING') {
-      window.quotesUI.filterStatus = '';
-      window.quotesUI.filterPendingOnly = true;
+      ui.filterStatus = '';
+      ui.filterPendingOnly = true;
     } else {
-      window.quotesUI.filterStatus = k;
-      window.quotesUI.filterPendingOnly = false;
+      ui.filterStatus = k;
+      ui.filterPendingOnly = false;
     }
-    window.quotesUI.update();
+    // chips 即時套用，同步草稿
+    ui.filterStatusDraft = ui.filterStatus;
+    ui.filterPendingOnlyDraft = ui.filterPendingOnly;
+
+    ui._scheduleUpdate();
   },
 
   toggleAdvancedFilters() {
@@ -1087,23 +1149,17 @@ Object.assign(QuotesUI, {
     const toEl = document.getElementById('quotes-filter-date-to');
     const minEl = document.getElementById('quotes-filter-amount-min');
     const maxEl = document.getElementById('quotes-filter-amount-max');
-    ui.filterDateFrom = (fromEl ? fromEl.value : ui.filterDateFrom) || '';
-    ui.filterDateTo = (toEl ? toEl.value : ui.filterDateTo) || '';
-    ui.filterAmountMin = (minEl ? minEl.value : ui.filterAmountMin) || '';
-    ui.filterAmountMax = (maxEl ? maxEl.value : ui.filterAmountMax) || '';
-    ui.update();
+    ui.filterDateFromDraft = (fromEl ? fromEl.value : ui.filterDateFromDraft) || '';
+    ui.filterDateToDraft = (toEl ? toEl.value : ui.filterDateToDraft) || '';
+    ui.filterAmountMinDraft = (minEl ? minEl.value : ui.filterAmountMinDraft) || '';
+    ui.filterAmountMaxDraft = (maxEl ? maxEl.value : ui.filterAmountMaxDraft) || '';
   },
 
   clearAdvancedFilters() {
     const ui = window.quotesUI;
     if (!ui) return;
-    ui.filterStatus = '';
-    ui.filterPendingOnly = false;
-    ui.filterDateFrom = '';
-    ui.filterDateTo = '';
-    ui.filterAmountMin = '';
-    ui.filterAmountMax = '';
-    ui.update();
+    // 相容舊按鈕：清除全部條件（立即套用）
+    ui.clearAll();
   },
 
   loadMore() {

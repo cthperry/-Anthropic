@@ -11,6 +11,7 @@
 class CustomerUI {
   constructor() {
     this.searchText = '';
+    this.searchDraft = '';
     this.searchDebounce = null;
 
     // 增量渲染控制（避免大量公司卡片一次性渲染卡頓）
@@ -29,6 +30,11 @@ class CustomerUI {
       hasPhone: false,
       hasEmail: false
     };
+
+    // 方案2：篩選草稿（輸入不立即套用；按【搜尋】才套用）
+    this.filtersDraft = { ...(this.filters || {}) };
+    this.searchDraft = this.searchText;
+
   }
 
   _getService() {
@@ -138,17 +144,22 @@ class CustomerUI {
     if (panel) panel.style.display = this.filtersPanelOpen ? 'block' : 'none';
     this._updateFiltersToggleButton();
   }
-
-  setFilter(key, value) {
+  setDraftFilter(key, value) {
     const k = (key || '').toString();
     if (!k) return;
-    this.filters = { ...(this.filters || {}) };
-    this.filters[k] = value;
-    this._saveFiltersState();
-    this._updateFiltersToggleButton();
-    this.updateList();
+    this.filtersDraft = { ...(this.filtersDraft || {}) };
+    this.filtersDraft[k] = value;
   }
 
+  applyFilters() {
+    // 套用：把草稿寫入正式 filters/searchText，並立即更新列表
+    this.filters = { ...(this.filtersDraft || {}) };
+    this.searchText = (this.searchDraft || '').toString().trim();
+
+    this._saveFiltersState();
+    this._updateFiltersToggleButton();
+    this._scheduleUpdateList();
+  }
   clearFilters() {
     this.filters = {
       updatedFrom: '',
@@ -157,9 +168,13 @@ class CustomerUI {
       hasPhone: false,
       hasEmail: false
     };
+    this.filtersDraft = { ...(this.filters || {}) };
+    this.searchText = '';
+    this.searchDraft = '';
+
     this._saveFiltersState();
     this._updateFiltersToggleButton();
-    this.updateList();
+    this._scheduleUpdateList();
   }
 
   _loadCollapsedState() {
@@ -250,8 +265,10 @@ class CustomerUI {
 
           <div class="module-toolbar-right">
             <div class="customers-search">
-              <input class="input" type="text" placeholder="搜尋公司/聯絡人/電話/Email" oninput="CustomerUI.onSearch(event)" />
+              <input class="input" id="customers-search-input" type="text" placeholder="搜尋公司/聯絡人/電話/Email" value="${this._escapeAttr((this.searchDraft || ''))}" oninput="CustomerUI.onSearchDraft(event)" />
             </div>
+            <button class="btn primary" onclick="CustomerUI.applyFilters()">🔍 搜尋</button>
+            <button class="btn" onclick="CustomerUI.clearFilters()">🧹 清除</button>
             <button class="btn" id="customers-toggle-filters-btn" onclick="CustomerUI.toggleFilters()">${this._escapeAttr(filtersBtnText)}</button>
             <button class="btn" onclick="CustomerUI.openRenameCompany()">📝 公司更名同步</button>
             <button class="btn primary" onclick="CustomerUI.openForm()">➕ 新增聯絡人</button>
@@ -264,30 +281,31 @@ class CustomerUI {
               <div class="panel-title"><strong>篩選</strong><span class="muted" style="margin-left:10px;">可多條件組合</span></div>
             </div>
             <div class="panel-right">
-              <button class="btn" onclick="CustomerUI.clearFilters()">清除</button>
+              <button class="btn primary" onclick="CustomerUI.applyFilters()">🔍 搜尋</button>
+              <button class="btn" onclick="CustomerUI.clearFilters()">🧹 清除</button>
             </div>
           </div>
 
           <div class="customers-filters-grid">
             <div class="field">
               <label class="form-label">更新日期（起）</label>
-              <input class="input" type="date" value="${this._escapeAttr((this.filters?.updatedFrom || ''))}" onchange="CustomerUI.onFilterChange(event, 'updatedFrom')" />
+              <input class="input" type="date" value="${this._escapeAttr((this.filtersDraft?.updatedFrom || ''))}" onchange="CustomerUI.onFilterDraftChange(event, 'updatedFrom')" />
             </div>
             <div class="field">
               <label class="form-label">更新日期（迄）</label>
-              <input class="input" type="date" value="${this._escapeAttr((this.filters?.updatedTo || ''))}" onchange="CustomerUI.onFilterChange(event, 'updatedTo')" />
+              <input class="input" type="date" value="${this._escapeAttr((this.filtersDraft?.updatedTo || ''))}" onchange="CustomerUI.onFilterDraftChange(event, 'updatedTo')" />
             </div>
             <div class="field">
               <label class="form-label">最少維修數</label>
-              <input class="input" type="number" min="0" step="1" placeholder="例如 1" value="${this._escapeAttr((this.filters?.minRepairCount || ''))}" oninput="CustomerUI.onFilterChange(event, 'minRepairCount')" />
+              <input class="input" type="number" min="0" step="1" placeholder="例如 1" value="${this._escapeAttr((this.filtersDraft?.minRepairCount || ''))}" oninput="CustomerUI.onFilterDraftChange(event, 'minRepairCount')" />
             </div>
             <div class="customers-filters-flags">
               <label class="form-checkbox">
-                <input type="checkbox" ${this.filters?.hasPhone ? 'checked' : ''} onchange="CustomerUI.onFilterToggle(event, 'hasPhone')" />
+                <input type="checkbox" ${this.filtersDraft?.hasPhone ? 'checked' : ''} onchange="CustomerUI.onFilterDraftToggle(event, 'hasPhone')" />
                 有電話
               </label>
               <label class="form-checkbox">
-                <input type="checkbox" ${this.filters?.hasEmail ? 'checked' : ''} onchange="CustomerUI.onFilterToggle(event, 'hasEmail')" />
+                <input type="checkbox" ${this.filtersDraft?.hasEmail ? 'checked' : ''} onchange="CustomerUI.onFilterDraftToggle(event, 'hasEmail')" />
                 有 Email
               </label>
             </div>
@@ -513,6 +531,15 @@ class CustomerUI {
     });
   }
 
+  _scheduleUpdateList() {
+    if (this._updateScheduled) return;
+    this._updateScheduled = true;
+    requestAnimationFrame(() => {
+      this._updateScheduled = false;
+      this.updateList();
+    });
+  }
+
   updateList() {
     const countEl = document.getElementById('customers-count');
     const statsEl = document.getElementById('customers-stats');
@@ -628,13 +655,14 @@ if (typeof window !== 'undefined') {
 
 // 靜態方法（由 HTML onclick 呼叫）
 Object.assign(CustomerUI, {
-  onSearch(event) {
-    const value = (event.target.value || '').trim();
-    clearTimeout(window.customerUI.searchDebounce);
-    window.customerUI.searchDebounce = setTimeout(() => {
-      window.customerUI.searchText = value;
-      window.customerUI.updateList();
-    }, 300);
+  onSearchDraft(event) {
+    const value = (event?.target?.value || '').toString();
+    window.customerUI.searchDraft = value;
+  },
+
+  applyFilters() {
+    if (!window.customerUI) return;
+    window.customerUI.applyFilters();
   },
 
   // P3：篩選面板（可摺疊 + 多條件）
@@ -643,23 +671,26 @@ Object.assign(CustomerUI, {
     window.customerUI.toggleFiltersPanel();
   },
 
-  onFilterChange(event, key) {
+  onFilterDraftChange(event, key) {
     if (!window.customerUI) return;
     const v = (event?.target?.value || '').toString();
-    window.customerUI.setFilter(key, v);
+    window.customerUI.setDraftFilter(key, v);
   },
 
-  onFilterToggle(event, key) {
+  onFilterDraftToggle(event, key) {
     if (!window.customerUI) return;
     const v = !!(event?.target?.checked);
-    window.customerUI.setFilter(key, v);
+    window.customerUI.setDraftFilter(key, v);
   },
 
   clearFilters() {
     if (!window.customerUI) return;
     window.customerUI.clearFilters();
-    // 清除後若面板仍開啟，確保按鈕數字更新
-    window.customerUI._updateFiltersToggleButton();
+    // 同步清空搜尋框
+    try {
+      const input = document.getElementById('customers-search-input');
+      if (input) input.value = '';
+    } catch (_) {}
   },
 
   /**

@@ -29,6 +29,7 @@ class GuideUI {
           </div>
           <div class="module-toolbar-right">
             <input class="input" id="guide-search" placeholder="搜尋：例如『新增維修單』『用料/更換』『版本控制』『轉訂單』『週報』『搬移資料』" />
+            <button class="btn primary" id="guide-apply" type="button">搜尋</button>
             <button class="btn" id="guide-clear" type="button">清除</button>
           </div>
         </div>
@@ -105,6 +106,7 @@ class GuideUI {
     if (!root) return;
 
     const search = root.querySelector('#guide-search');
+    const applyBtn = root.querySelector('#guide-apply');
     const clearBtn = root.querySelector('#guide-clear');
     const noResult = root.querySelector('#guide-noresult');
     const cards = Array.from(root.querySelectorAll('.guide-card'));
@@ -802,4 +804,9 @@ class GuideUI {
 }
 
 window.guideUI = new GuideUI();
-console.log('✅ GuideUI loaded');
+console.log('✅ GuideUI loaded');    applyBtn?.addEventListener('click', applyFilter);
+    search?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') applyFilter();
+    });
+
+
