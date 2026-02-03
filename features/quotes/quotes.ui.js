@@ -6,10 +6,13 @@
 class QuotesUI {
   constructor() {
     this.searchText = '';
-    this.searchDraft = '';
     this.filterStatus = '';
     this.filterPendingOnly = false;
     this.sortKey = 'updatedAt_desc';
+    // 方案2：先輸入條件，按【搜尋】才套用（Chips 立即套用、清除立即套用）
+    this.searchDraft = '';
+    this.filterStatusDraft = '';
+    this.sortKeyDraft = this.sortKey;
     this.searchDebounce = null;
     this._renderToken = 0;
     this._updateScheduled = false;
@@ -32,6 +35,13 @@ class QuotesUI {
     this.filterAmountMin = '';
     this.filterAmountMax = '';
 
+    // 方案2：進階篩選草稿（未按搜尋前不套用）
+    this.filterDateFromDraft = '';
+    this.filterDateToDraft = '';
+    this.filterAmountMinDraft = '';
+    this.filterAmountMaxDraft = '';
+
+    this._syncDraftFromApplied();
   }
 
   _isoToDate(iso) {
@@ -90,6 +100,29 @@ class QuotesUI {
     } catch (_) {}
   }
 
+  _syncDraftFromApplied(){
+    // 避免覆寫使用者尚未按搜尋的輸入：只在草稿為空/未定義時同步
+    if (this.searchDraft === undefined || this.searchDraft === null) this.searchDraft = '';
+    if ((this.searchDraft === '' || this.searchDraft === null) && this.searchText) this.searchDraft = this.searchText;
+
+    if (this.filterStatusDraft === undefined || this.filterStatusDraft === null) this.filterStatusDraft = '';
+    if ((this.filterStatusDraft === '' || this.filterStatusDraft === null) && this.filterStatus) this.filterStatusDraft = this.filterStatus;
+
+    if (this.sortKeyDraft === undefined || this.sortKeyDraft === null || this.sortKeyDraft === '') this.sortKeyDraft = this.sortKey || 'updatedAt_desc';
+
+    if (this.filterDateFromDraft === undefined || this.filterDateFromDraft === null) this.filterDateFromDraft = '';
+    if ((this.filterDateFromDraft === '' || this.filterDateFromDraft === null) && this.filterDateFrom) this.filterDateFromDraft = this.filterDateFrom;
+
+    if (this.filterDateToDraft === undefined || this.filterDateToDraft === null) this.filterDateToDraft = '';
+    if ((this.filterDateToDraft === '' || this.filterDateToDraft === null) && this.filterDateTo) this.filterDateToDraft = this.filterDateTo;
+
+    if (this.filterAmountMinDraft === undefined || this.filterAmountMinDraft === null) this.filterAmountMinDraft = '';
+    if ((this.filterAmountMinDraft === '' || this.filterAmountMinDraft === null) && this.filterAmountMin) this.filterAmountMinDraft = this.filterAmountMin;
+
+    if (this.filterAmountMaxDraft === undefined || this.filterAmountMaxDraft === null) this.filterAmountMaxDraft = '';
+    if ((this.filterAmountMaxDraft === '' || this.filterAmountMaxDraft === null) && this.filterAmountMax) this.filterAmountMaxDraft = this.filterAmountMax;
+  }
+
   _isoYmd(iso) {
     const s = (iso || '').toString();
     if (!s) return '';
@@ -130,49 +163,6 @@ class QuotesUI {
     return { accent: 'var(--module-accent)', soft: 'var(--module-accent-soft)' };
   }
 
-  _scheduleUpdate() {
-    if (this._updateScheduled) return;
-    this._updateScheduled = true;
-    requestAnimationFrame(() => {
-      this._updateScheduled = false;
-      try { this.update(); } catch (_) {}
-    });
-  }
-
-  applyFilters() {
-    this.searchText = (this.searchDraft || '').toString().trim();
-    this.filterStatus = (this.filterStatusDraft || '').toString().trim();
-    this.filterPendingOnly = !!this.filterPendingOnlyDraft;
-    this.sortKey = (this.sortKeyDraft || 'updatedAt_desc').toString().trim() || 'updatedAt_desc';
-    this.filterDateFrom = (this.filterDateFromDraft || '').toString();
-    this.filterDateTo = (this.filterDateToDraft || '').toString();
-    this.filterAmountMin = (this.filterAmountMinDraft || '').toString();
-    this.filterAmountMax = (this.filterAmountMaxDraft || '').toString();
-
-    this._scheduleUpdate();
-  }
-
-  clearAll() {
-    this.searchText = '';
-    this.searchDraft = '';
-    this.filterStatus = '';
-    this.filterStatusDraft = '';
-    this.filterPendingOnly = false;
-    this.filterPendingOnlyDraft = false;
-    this.sortKey = 'updatedAt_desc';
-    this.sortKeyDraft = 'updatedAt_desc';
-    this.filterDateFrom = '';
-    this.filterDateFromDraft = '';
-    this.filterDateTo = '';
-    this.filterDateToDraft = '';
-    this.filterAmountMin = '';
-    this.filterAmountMinDraft = '';
-    this.filterAmountMax = '';
-    this.filterAmountMaxDraft = '';
-    this._scheduleUpdate();
-  }
-
-
   render(containerId) {
     const el = document.getElementById(containerId);
     if (!el) return;
@@ -188,10 +178,10 @@ class QuotesUI {
           </div>
           <div class="module-toolbar-right">
             <div class="quotes-search">
-              <input class="input" type="text" placeholder="搜尋：報價單號 / 客戶 / 狀態" value="${this._escapeAttr(this.searchDraft)}" oninput="QuotesUI.onSearchDraft(event)" />
+              <input class="input" type="text" placeholder="搜尋：報價單號 / 客戶 / 狀態" value="${this._escapeAttr(this.searchDraft ?? this.searchText)}" oninput="QuotesUI.onSearchDraft(event)" onkeydown="QuotesUI.onSearchKeydown(event)" />
             </div>
-            <button class="btn primary" onclick="QuotesUI.applyFilters()">🔍 搜尋</button>
-            <button class="btn" onclick="QuotesUI.clearAll()">🧹 清除</button>
+            <button class="btn" onclick="QuotesUI.applyAllFilters()">搜尋</button>
+            <button class="btn ghost" onclick="QuotesUI.clearAllFilters()">清除</button>
             <button class="btn primary" onclick="QuotesUI.openCreateFromRepair()">從維修單建立</button>
           </div>
         </div>
@@ -220,6 +210,9 @@ class QuotesUI {
     } catch (e) {
       console.warn('QuotesUI init service failed:', e);
     }
+
+    // 確保草稿存在（避免第一次 render input 空白）
+    try { this._syncDraftFromApplied(); } catch (_) {}
 
     const baseRows = window.QuoteService ? window.QuoteService.search(this.searchText) : [];
     const subtitle = document.getElementById('quotes-subtitle');
@@ -286,10 +279,11 @@ class QuotesUI {
     if (!host) return;
     const statuses = (AppConfig?.business?.quoteStatus || []).map(s => s.value);
 
-    const from = this._escapeAttr(this.filterDateFromDraft || '');
-    const to = this._escapeAttr(this.filterDateToDraft || '');
-    const minAmt = this._escapeAttr(this.filterAmountMinDraft || '');
-    const maxAmt = this._escapeAttr(this.filterAmountMaxDraft || '');
+    // 注意：?? 不可直接與 || 混用，需加括號避免語法錯誤
+    const from = this._escapeAttr((this.filterDateFromDraft ?? this.filterDateFrom) || '');
+    const to = this._escapeAttr((this.filterDateToDraft ?? this.filterDateTo) || '');
+    const minAmt = this._escapeAttr((this.filterAmountMinDraft ?? this.filterAmountMin) || '');
+    const maxAmt = this._escapeAttr((this.filterAmountMaxDraft ?? this.filterAmountMax) || '');
 
     host.innerHTML = `
       <div class="quotes-filters-inner">
@@ -306,8 +300,8 @@ class QuotesUI {
 
           <div class="quotes-filters-actions" aria-label="篩選操作">
             <button class="btn sm" onclick="QuotesUI.toggleAdvancedFilters()">${this.filtersOpen ? '收合' : '展開'} 篩選</button>
-            <button class="btn sm primary" onclick="QuotesUI.applyFilters()">🔍 搜尋</button>
-            <button class="btn sm ghost" onclick="QuotesUI.clearAll()" title="清除所有條件">清除</button>
+            <button class="btn sm" onclick="QuotesUI.applyAllFilters()">搜尋</button>
+            <button class="btn sm ghost" onclick="QuotesUI.clearAllFilters()" title="清除所有篩選">清除</button>
           </div>
         </div>
 
@@ -316,18 +310,18 @@ class QuotesUI {
             <div class="filter-group">
               <label class="form-label">狀態（詳細）</label>
               <select class="input" id="quotes-filter-status" onchange="QuotesUI.setStatusFilter(event)">
-                <option value="" ${(this.filterStatusDraft || "").toString().trim() ? "" : "selected"}>全部</option>
-                ${statuses.map(v => `<option value="${this._escapeAttr(v)}" ${this.filterStatusDraft === v ? 'selected' : ''}>${this._escapeHtml(v)}</option>`).join('')}
+                <option value="" ${this.filterStatusDraft ? '' : 'selected'}>全部</option>
+                ${statuses.map(v => `<option value="${this._escapeAttr(v)}" ${(this.filterStatusDraft === v) ? 'selected' : ''}>${this._escapeHtml(v)}</option>`).join('')}
               </select>
             </div>
 
             <div class="filter-group">
               <label class="form-label">排序</label>
               <select class="input" id="quotes-filter-sort" onchange="QuotesUI.setSort(event)">
-                <option value="updatedAt_desc" ${this.sortKeyDraft === 'updatedAt_desc' ? 'selected' : ''}>最近更新</option>
-                <option value="createdAt_desc" ${this.sortKeyDraft === 'createdAt_desc' ? 'selected' : ''}>建立日（新→舊）</option>
-                <option value="totalAmount_desc" ${this.sortKeyDraft === 'totalAmount_desc' ? 'selected' : ''}>金額（高→低）</option>
-                <option value="quoteNo_desc" ${this.sortKeyDraft === 'quoteNo_desc' ? 'selected' : ''}>報價單號（新→舊）</option>
+                <option value="updatedAt_desc" ${(this.sortKeyDraft || this.sortKey) === 'updatedAt_desc' ? 'selected' : ''}>最近更新</option>
+                <option value="createdAt_desc" ${(this.sortKeyDraft || this.sortKey) === 'createdAt_desc' ? 'selected' : ''}>建立日（新→舊）</option>
+                <option value="totalAmount_desc" ${(this.sortKeyDraft || this.sortKey) === 'totalAmount_desc' ? 'selected' : ''}>金額（高→低）</option>
+                <option value="quoteNo_desc" ${(this.sortKeyDraft || this.sortKey) === 'quoteNo_desc' ? 'selected' : ''}>報價單號（新→舊）</option>
               </select>
             </div>
           </div>
@@ -1069,20 +1063,23 @@ if (typeof window !== 'undefined') {
 
 Object.assign(QuotesUI, {
   onSearchDraft(event) {
-    const value = (event?.target?.value || '').toString();
-    window.quotesUI.searchDraft = value;
+    try {
+      const value = (event?.target?.value || '').toString();
+      window.quotesUI.searchDraft = value;
+    } catch (_) {}
   },
 
-  applyFilters() {
-    const ui = window.quotesUI;
-    if (!ui) return;
-    ui.applyFilters();
+  onSearchKeydown(event){
+    const k = event?.key || event?.keyCode;
+    if (k === 'Enter' || k === 13) {
+      try { event.preventDefault(); } catch (_) {}
+      QuotesUI.applyAllFilters();
+    }
   },
 
-  clearAll() {
-    const ui = window.quotesUI;
-    if (!ui) return;
-    ui.clearAll();
+  // 相容舊呼叫：原本 onSearch 為即時搜尋，現在改為更新草稿
+  onSearch(event){
+    QuotesUI.onSearchDraft(event);
   },
 
   onMoneyFocus(event) {
@@ -1100,38 +1097,35 @@ Object.assign(QuotesUI, {
     } catch (_) {}
   },
 
+
   setStatusFilter(event) {
-    const ui = window.quotesUI;
-    if (!ui) return;
-    ui.filterStatusDraft = (event?.target?.value || '').toString().trim();
-    ui.filterPendingOnlyDraft = false;
+    try {
+      window.quotesUI.filterStatusDraft = (event?.target?.value || '').toString().trim();
+      // 不即時套用（方案2），等按【搜尋】
+    } catch (_) {}
   },
 
   setSort(event) {
-    const ui = window.quotesUI;
-    if (!ui) return;
-    ui.sortKeyDraft = (event?.target?.value || 'updatedAt_desc').toString().trim() || 'updatedAt_desc';
+    try {
+      window.quotesUI.sortKeyDraft = (event?.target?.value || 'updatedAt_desc').toString().trim();
+    } catch (_) {}
   },
 
   setQuickFilter(key) {
-    const ui = window.quotesUI;
-    if (!ui) return;
     const k = (key || '').toString().trim();
     if (!k) {
-      ui.filterStatus = '';
-      ui.filterPendingOnly = false;
+      window.quotesUI.filterStatus = '';
+      window.quotesUI.filterPendingOnly = false;
     } else if (k === 'PENDING') {
-      ui.filterStatus = '';
-      ui.filterPendingOnly = true;
+      window.quotesUI.filterStatus = '';
+      window.quotesUI.filterPendingOnly = true;
     } else {
-      ui.filterStatus = k;
-      ui.filterPendingOnly = false;
+      window.quotesUI.filterStatus = k;
+      window.quotesUI.filterPendingOnly = false;
     }
-    // chips 即時套用，同步草稿
-    ui.filterStatusDraft = ui.filterStatus;
-    ui.filterPendingOnlyDraft = ui.filterPendingOnly;
-
-    ui._scheduleUpdate();
+    // Chips 立即套用，同步草稿讓 UI 一致
+    try { window.quotesUI._syncDraftFromApplied(); } catch (_) {}
+    window.quotesUI.update();
   },
 
   toggleAdvancedFilters() {
@@ -1153,13 +1147,63 @@ Object.assign(QuotesUI, {
     ui.filterDateToDraft = (toEl ? toEl.value : ui.filterDateToDraft) || '';
     ui.filterAmountMinDraft = (minEl ? minEl.value : ui.filterAmountMinDraft) || '';
     ui.filterAmountMaxDraft = (maxEl ? maxEl.value : ui.filterAmountMaxDraft) || '';
+    // 不即時套用（方案2），等按【搜尋】
+  },
+
+  applyAllFilters() {
+    const ui = window.quotesUI;
+    if (!ui) return;
+    // 先把進階篩選 DOM 草稿同步一次（避免使用者只改了 input，未觸發 onchange）
+    try { QuotesUI.applyAdvancedFilters(); } catch (_) {}
+
+    ui.searchText = (ui.searchDraft || '').toString().trim();
+
+    // 狀態：若使用者在進階下拉選了狀態，視為要覆蓋 chips
+    const st = (ui.filterStatusDraft || '').toString().trim();
+    if (st) {
+      ui.filterStatus = st;
+      ui.filterPendingOnly = false;
+    } else if (!ui.filterPendingOnly) {
+      // 沒有 pending chips 時，才清空狀態
+      ui.filterStatus = '';
+    }
+
+    ui.sortKey = (ui.sortKeyDraft || ui.sortKey || 'updatedAt_desc').toString().trim();
+    ui.filterDateFrom = (ui.filterDateFromDraft || '').toString();
+    ui.filterDateTo = (ui.filterDateToDraft || '').toString();
+    ui.filterAmountMin = (ui.filterAmountMinDraft || '').toString();
+    ui.filterAmountMax = (ui.filterAmountMaxDraft || '').toString();
+
+    ui.update();
+  },
+
+  clearAllFilters() {
+    const ui = window.quotesUI;
+    if (!ui) return;
+
+    ui.searchText = '';
+    ui.searchDraft = '';
+    ui.filterStatus = '';
+    ui.filterStatusDraft = '';
+    ui.filterPendingOnly = false;
+    ui.sortKey = 'updatedAt_desc';
+    ui.sortKeyDraft = ui.sortKey;
+
+    ui.filterDateFrom = '';
+    ui.filterDateTo = '';
+    ui.filterAmountMin = '';
+    ui.filterAmountMax = '';
+    ui.filterDateFromDraft = '';
+    ui.filterDateToDraft = '';
+    ui.filterAmountMinDraft = '';
+    ui.filterAmountMaxDraft = '';
+
+    ui.update();
   },
 
   clearAdvancedFilters() {
-    const ui = window.quotesUI;
-    if (!ui) return;
-    // 相容舊按鈕：清除全部條件（立即套用）
-    ui.clearAll();
+    // 相容舊按鈕：等同於全清
+    QuotesUI.clearAllFilters();
   },
 
   loadMore() {

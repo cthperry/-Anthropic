@@ -8,6 +8,8 @@
 class GuideUI {
   constructor(){
     this.containerId = 'guide-container';
+    this.searchText = '';
+    this.searchDraft = '';
   }
 
   render(containerId = 'guide-container'){
@@ -28,8 +30,8 @@ class GuideUI {
             </div>
           </div>
           <div class="module-toolbar-right">
-            <input class="input" id="guide-search" placeholder="搜尋：例如『新增維修單』『用料/更換』『版本控制』『轉訂單』『週報』『搬移資料』" />
-            <button class="btn primary" id="guide-apply" type="button">搜尋</button>
+            <input class="input" id="guide-search" placeholder="搜尋：例如『新增維修單』『用料/更換』『版本控制』『轉訂單』『週報』『搬移資料』" value="${this.escape(this.searchDraft || '')}" />
+            <button class="btn" id="guide-apply" type="button">搜尋</button>
             <button class="btn" id="guide-clear" type="button">清除</button>
           </div>
         </div>
@@ -106,13 +108,11 @@ class GuideUI {
     if (!root) return;
 
     const search = root.querySelector('#guide-search');
-    const applyBtn = root.querySelector('#guide-apply');
     const clearBtn = root.querySelector('#guide-clear');
     const noResult = root.querySelector('#guide-noresult');
     const cards = Array.from(root.querySelectorAll('.guide-card'));
-
     const applyFilter = () => {
-      const q = (search?.value || '').trim().toLowerCase();
+      const q = (this.searchText || '').trim().toLowerCase();
       let visible = 0;
       cards.forEach(card => {
         const hay = String(card.getAttribute('data-search') || '').toLowerCase();
@@ -123,29 +123,41 @@ class GuideUI {
       if (noResult) noResult.style.display = (q && visible === 0) ? '' : 'none';
     };
 
-    let searchTimer = null;
+    const applyFromDraft = () => {
+      this.searchText = (this.searchDraft || '').toString();
+      applyFilter();
+    };
+
     if (search) {
       search.addEventListener('input', () => {
-        try { if (searchTimer) clearTimeout(searchTimer); } catch (_) {}
-        searchTimer = setTimeout(applyFilter, 300);
+        this.searchDraft = (search.value || '').toString();
+      });
+      search.addEventListener('keydown', (ev) => {
+        const k = ev?.key || ev?.keyCode;
+        if (k === 'Enter' || k === 13) {
+          try { ev.preventDefault(); } catch (_) {}
+          applyFromDraft();
+        }
       });
     }
+
+    const applyBtn = root.querySelector('#guide-apply');
+    if (applyBtn) {
+      applyBtn.addEventListener('click', () => {
+        this.searchDraft = (search?.value || '').toString();
+        applyFromDraft();
+      });
+    }
+
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
+        this.searchDraft = '';
+        this.searchText = '';
         if (search) search.value = '';
         applyFilter();
         try { search && search.focus(); } catch (_) {}
       });
     }
-
-    root.querySelectorAll('[data-target]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.getAttribute('data-target');
-        const el = id ? root.querySelector('#' + id) : null;
-        if (!el) return;
-        try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) { el.scrollIntoView(); }
-      });
-    });
 
     // 初始套用
     applyFilter();
@@ -804,9 +816,4 @@ class GuideUI {
 }
 
 window.guideUI = new GuideUI();
-console.log('✅ GuideUI loaded');    applyBtn?.addEventListener('click', applyFilter);
-    search?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') applyFilter();
-    });
-
-
+console.log('✅ GuideUI loaded');

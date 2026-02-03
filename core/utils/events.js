@@ -76,10 +76,38 @@
     } catch (_) {}
   }
 
+  // 以 (element,event,key) 去重綁定：避免重複 render / init 時累積 listener
+  const _uniqueMap = typeof WeakMap === 'function' ? new WeakMap() : null;
+
+  function onUnique(el, event, key, handler, opts, controller) {
+    if (!el || !event || typeof handler !== 'function') return;
+    const k = String(key || '') || (event + ':' + (handler.name || 'handler'));
+
+    try {
+      if (_uniqueMap) {
+        let rec = _uniqueMap.get(el);
+        if (!rec) { rec = {}; _uniqueMap.set(el, rec); }
+        const ek = event + '::' + k;
+        if (rec[ek]) return;
+        rec[ek] = true;
+      } else {
+        // fallback：在 element 上掛載最小標記
+        const prop = '__evtUnique__';
+        const rec = el[prop] || (el[prop] = {});
+        const ek = event + '::' + k;
+        if (rec[ek]) return;
+        rec[ek] = true;
+      }
+    } catch (_) {}
+
+    on(el, event, handler, opts, controller);
+  }
+
   window.EventUtils = Object.assign(window.EventUtils || {}, {
     supportsSignal,
     createController,
     abort,
     on,
+    onUnique,
   });
 })();

@@ -70,12 +70,15 @@
     constructor(){
       this.tab = 'dashboard';
       this.searchEquip = '';
-    this.searchEquipDraft = '';
+      this.searchEquipDraft = '';
       this.searchRecord = '';
-    this.searchRecordDraft = '';
+      this.searchRecordDraft = '';
       this.filterEquipmentId = '';
+      this.filterEquipmentIdDraft = '';
       this.filterFrom = '';
+      this.filterFromDraft = '';
       this.filterTo = '';
+      this.filterToDraft = '';
 
       this._bound = false;
       this._pendingAction = null;
@@ -98,6 +101,12 @@
         if (dl.filterEquipmentId !== undefined) this.filterEquipmentId = toStr(dl.filterEquipmentId);
         if (dl.filterFrom !== undefined) this.filterFrom = toStr(dl.filterFrom);
         if (dl.filterTo !== undefined) this.filterTo = toStr(dl.filterTo);
+        // 同步草稿（方案2）
+        this.searchEquipDraft = this.searchEquip;
+        this.searchRecordDraft = this.searchRecord;
+        this.filterEquipmentIdDraft = this.filterEquipmentId;
+        this.filterFromDraft = this.filterFrom;
+        this.filterToDraft = this.filterTo;
         if (dl.action) this._pendingAction = dl.action;
       } catch (e) {
         console.warn('maintenance deepLink parse failed:', e);
@@ -488,9 +497,8 @@
               <div class="muted">設備編號／週期設定／模板（Checklist）</div>
             </div>
             <div class="panel-right">
-              <input class="input" style="max-width:360px" placeholder="搜尋：設備編號/名稱/型號/位置/負責人" value="${esc(this.searchEquipDraft)}" oninput="MaintenanceUI._setEquipSearch(event)" />
-              <button class="btn sm primary" onclick="MaintenanceUI.applyEquipSearch()">🔍 搜尋</button>
-              <button class="btn sm ghost" onclick="MaintenanceUI.clearEquipSearch()">清除</button>
+              <input class="input" style="max-width:360px" placeholder="搜尋：設備編號/名稱/型號/位置/負責人" value="${esc(this.searchEquipDraft)}" oninput="MaintenanceUI._setEquipSearchDraft(event)" onkeydown="MaintenanceUI._onEquipSearchKeydown(event)" />
+              <button class="btn" onclick="MaintenanceUI.applyEquipSearch()">搜尋</button>
               <button class="btn ghost" onclick="MaintenanceUI.clearEquipSearch()">清除</button>
             </div>
           </div>
@@ -501,14 +509,26 @@
         </div>
       `;
     }
-  _setEquipSearch(ev) {
-    this.searchEquipDraft = (ev?.target?.value || '').toString();
-  }
+    _setEquipSearchDraft(ev){
+      this.searchEquipDraft = toStr(ev?.target?.value);
+    }
+
+    _onEquipSearchKeydown(ev){
+      const k = ev?.key || ev?.keyCode;
+      if (k === 'Enter' || k === 13) {
+        try { ev.preventDefault(); } catch (_) {}
+        this.applyEquipSearch();
+      }
+    }
+
+    applyEquipSearch(){
+      this.searchEquip = toStr(this.searchEquipDraft);
+      this._renderBody();
+    }
 
     clearEquipSearch(){
+      this.searchEquipDraft = '';
       this.searchEquip = '';
-      try { if (this._equipSearchTimer) clearTimeout(this._equipSearchTimer); } catch (_) {}
-      this._equipSearchTimer = null;
       this._renderBody();
     }
 
@@ -524,6 +544,7 @@
       const from = toStr(this.filterFrom).trim();
       const to = toStr(this.filterTo).trim();
       const eqId = toStr(this.filterEquipmentId).trim();
+      const eqIdDraft = toStr(this.filterEquipmentIdDraft).trim();
 
       const filtered = recs.filter(r => {
         if (eqId && toStr(r.equipmentId) !== eqId) return false;
@@ -534,7 +555,7 @@
       }).sort((a,b) => toStr(b.performedAt).localeCompare(toStr(a.performedAt)));
 
       const eqOptions = ['<option value="">全部設備</option>']
-        .concat(eqs.map(e => `<option value="${esc(e.id)}" ${toStr(e.id)===eqId?'selected':''}>${esc(e.equipmentNo)} ${esc(e.name)}</option>`))
+        .concat(eqs.map(e => `<option value="${esc(e.id)}" ${toStr(e.id)===eqIdDraft?'selected':''}>${esc(e.equipmentNo)} ${esc(e.name)}</option>`))
         .join('');
 
       const rows = filtered.map(r => {
@@ -574,12 +595,11 @@
               <div class="muted">查詢／新增／異常／更換零件</div>
             </div>
             <div class="panel-right" style="gap:8px;">
-              <select class="input" style="max-width:320px" onchange="MaintenanceUI._setRecEq(event)">${eqOptions}</select>
-              <input class="input" type="date" style="max-width:180px" value="${esc(from)}" onchange="MaintenanceUI._setRecFrom(event)" />
-              <input class="input" type="date" style="max-width:180px" value="${esc(to)}" onchange="MaintenanceUI._setRecTo(event)" />
-              <input class="input" style="max-width:240px" placeholder="搜尋：關鍵字" value="${esc(this.searchRecordDraft)}" oninput="MaintenanceUI._setRecSearch(event)" />
-              <button class="btn sm primary" onclick="MaintenanceUI.applyRecSearch()">🔍 搜尋</button>
-              <button class="btn sm ghost" onclick="MaintenanceUI.clearRecSearch()">清除</button>
+              <select class="input" style="max-width:320px" onchange="MaintenanceUI._setRecEqDraft(event)">${eqOptions}</select>
+              <input class="input" type="date" style="max-width:180px" value="${esc(toStr(this.filterFromDraft))}" onchange="MaintenanceUI._setRecFromDraft(event)" />
+              <input class="input" type="date" style="max-width:180px" value="${esc(toStr(this.filterToDraft))}" onchange="MaintenanceUI._setRecToDraft(event)" />
+              <input class="input" style="max-width:240px" placeholder="搜尋：關鍵字" value="${esc(toStr(this.searchRecordDraft))}" oninput="MaintenanceUI._setRecSearchDraft(event)" onkeydown="MaintenanceUI._onRecSearchKeydown(event)" />
+              <button class="btn" onclick="MaintenanceUI.applyRecordFilters()">搜尋</button>
               <button class="btn" onclick="MaintenanceUI.openCreateRecord()">＋ 新增</button>
               <button class="btn ghost" onclick="MaintenanceUI.clearRecordFilters()">清除</button>
             </div>
@@ -591,44 +611,36 @@
         </div>
       `;
     }
+    _setRecEqDraft(ev){ this.filterEquipmentIdDraft = toStr(ev?.target?.value); }
+    _setRecFromDraft(ev){ this.filterFromDraft = toStr(ev?.target?.value); }
+    _setRecToDraft(ev){ this.filterToDraft = toStr(ev?.target?.value); }
+    _setRecSearchDraft(ev){ this.searchRecordDraft = toStr(ev?.target?.value); }
 
-    _setRecEq(ev){ this.filterEquipmentId = toStr(ev?.target?.value); this._renderBody(); }
-    _setRecFrom(ev){ this.filterFrom = toStr(ev?.target?.value); this._renderBody(); }
-    _setRecTo(ev){ this.filterTo = toStr(ev?.target?.value); this._renderBody(); }
-  _setRecSearch(ev) {
-    this.searchRecordDraft = (ev?.target?.value || '').toString();
-  }
+    _onRecSearchKeydown(ev){
+      const k = ev?.key || ev?.keyCode;
+      if (k === 'Enter' || k === 13) {
+        try { ev.preventDefault(); } catch (_) {}
+        this.applyRecordFilters();
+      }
+    }
 
-  applyEquipSearch() {
-    this.searchEquip = (this.searchEquipDraft || '').toString().trim();
-    this._renderBody();
-  }
-
-  clearEquipSearch() {
-    this.searchEquip = '';
-    this.searchEquipDraft = '';
-    this._renderBody();
-  }
-
-  applyRecSearch() {
-    this.searchRecord = (this.searchRecordDraft || '').toString().trim();
-    this._renderBody();
-  }
-
-  clearRecSearch() {
-    this.searchRecord = '';
-    this.searchRecordDraft = '';
-    this._renderBody();
-  }
-
+    applyRecordFilters(){
+      this.filterEquipmentId = toStr(this.filterEquipmentIdDraft);
+      this.filterFrom = toStr(this.filterFromDraft);
+      this.filterTo = toStr(this.filterToDraft);
+      this.searchRecord = toStr(this.searchRecordDraft);
+      this._renderBody();
+    }
 
     clearRecordFilters(){
+      this.searchRecordDraft = '';
+      this.filterFromDraft = '';
+      this.filterToDraft = '';
+      this.filterEquipmentIdDraft = '';
       this.searchRecord = '';
       this.filterFrom = '';
       this.filterTo = '';
       this.filterEquipmentId = '';
-      try { if (this._recSearchTimer) clearTimeout(this._recSearchTimer); } catch (_) {}
-      this._recSearchTimer = null;
       this._renderBody();
     }
 
@@ -1574,9 +1586,12 @@
     openCreateEquipment: (prefill) => maintenanceUI.openCreateEquipment(prefill),
     openEditEquipment: (id) => maintenanceUI.openEditEquipment(id),
     removeEquipment: (id) => maintenanceUI.removeEquipment(id),
-    applyEquipSearch: () => maintenanceUI.applyEquipSearch(),
     clearEquipSearch: () => maintenanceUI.clearEquipSearch(),
-    _setEquipSearch: (e) => maintenanceUI._setEquipSearch(e),
+    applyEquipSearch: () => maintenanceUI.applyEquipSearch(),
+    _setEquipSearchDraft: (e) => maintenanceUI._setEquipSearchDraft(e),
+    _onEquipSearchKeydown: (e) => maintenanceUI._onEquipSearchKeydown(e),
+    // 相容舊呼叫
+    _setEquipSearch: (e) => maintenanceUI._setEquipSearchDraft(e),
 
     openCreateRecord: () => maintenanceUI.openCreateRecord(),
     openCreateRecordFor: (id) => maintenanceUI.openCreateRecordFor(id),
@@ -1584,13 +1599,19 @@
     openViewRecord: (id) => maintenanceUI.openViewRecord(id),
     removeRecord: (id) => maintenanceUI.removeRecord(id),
 
-    _setRecEq: (e) => maintenanceUI._setRecEq(e),
-    _setRecFrom: (e) => maintenanceUI._setRecFrom(e),
-    _setRecTo: (e) => maintenanceUI._setRecTo(e),
-    applyRecSearch: () => maintenanceUI.applyRecSearch(),
-    clearRecSearch: () => maintenanceUI.clearRecSearch(),
-    _setRecSearch: (e) => maintenanceUI._setRecSearch(e),
+    _setRecEqDraft: (e) => maintenanceUI._setRecEqDraft(e),
+    _setRecFromDraft: (e) => maintenanceUI._setRecFromDraft(e),
+    _setRecToDraft: (e) => maintenanceUI._setRecToDraft(e),
+    _setRecSearchDraft: (e) => maintenanceUI._setRecSearchDraft(e),
+    _onRecSearchKeydown: (e) => maintenanceUI._onRecSearchKeydown(e),
+    applyRecordFilters: () => maintenanceUI.applyRecordFilters(),
     clearRecordFilters: () => maintenanceUI.clearRecordFilters(),
+
+    // 相容舊呼叫
+    _setRecEq: (e) => maintenanceUI._setRecEqDraft(e),
+    _setRecFrom: (e) => maintenanceUI._setRecFromDraft(e),
+    _setRecTo: (e) => maintenanceUI._setRecToDraft(e),
+    _setRecSearch: (e) => maintenanceUI._setRecSearchDraft(e),
 
     saveEmailTo: () => maintenanceUI.saveEmailTo(),
     sendReminderEmail: () => maintenanceUI.sendReminderEmail(),

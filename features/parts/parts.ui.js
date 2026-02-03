@@ -7,12 +7,19 @@ class PartsUI {
   constructor() {
     this.view = 'tracker'; // tracker | catalog
     this.searchText = '';
+    this.searchDraft = '';
     this.filterStatus = '';
+    this.filterStatusDraft = '';
     this.filterOverdue = false;
+    this.filterOverdueDraft = false;
     this.filterOpenOnly = false;
-    this.catalogQuick = ''; // '' | ACTIVE | INACTIVE | ZERO | LOW
+    this.filterOpenOnlyDraft = false;
+    this.catalogQuick = '';
+    this.catalogQuickDraft = ''; // '' | ACTIVE | INACTIVE | ZERO | LOW
     this.sortKey = 'updatedAt_desc';
+    this.sortKeyDraft = 'updatedAt_desc';
     this.contextRepairId = '';
+    this.contextRepairIdDraft = '';
     this.searchDebounce = null;
 
     // tracker：批次編輯（以維修單為依據）
@@ -20,6 +27,15 @@ class PartsUI {
 
     // P3：可摺疊篩選面板（各列表頁面一致的互動）
     this.filtersPanelOpen = this._loadFiltersPanelOpen();
+
+
+    // Phase 4：列表降載（避免一次性渲染大量卡片造成卡頓）
+    this.pageSize = (window.ListPaging && typeof window.ListPaging.getDefaultPageSize === 'function')
+      ? window.ListPaging.getDefaultPageSize({ mobileSize: 40, desktopSize: 60 })
+      : 60;
+    this.visibleCount = this.pageSize;
+    this._renderToken = 0;
+    this._querySig = '';
   }
 
   _getFiltersOpenStorageKey(view = '') {
@@ -139,48 +155,6 @@ class PartsUI {
     return this._escapeHtml(input).split('\n').join(' ').split('\r').join(' ');
   }
 
-  _scheduleUpdate() {
-    if (this._updateScheduled) return;
-    this._updateScheduled = true;
-    requestAnimationFrame(() => {
-      this._updateScheduled = false;
-      try { this.update(); } catch (_) {}
-    });
-  }
-
-  applyFilters() {
-    this.searchText = (this.searchDraft || '').toString().trim();
-    this.filterStatus = (this.filterStatusDraft || '').toString().trim();
-    this.filterOverdue = !!this.filterOverdueDraft;
-    this.filterOpenOnly = !!this.filterOpenOnlyDraft;
-    this.contextRepairId = (this.contextRepairIdDraft || '').toString().trim();
-    this.catalogQuick = (this.catalogQuickDraft || '').toString().trim();
-    this.sortKey = (this.sortKeyDraft || '').toString().trim() || this.sortKey || 'updatedAt_desc';
-
-    this._scheduleUpdate();
-  }
-
-  clearAll() {
-    this.searchText = '';
-    this.searchDraft = '';
-    this.filterStatus = '';
-    this.filterStatusDraft = '';
-    this.filterOverdue = false;
-    this.filterOverdueDraft = false;
-    this.filterOpenOnly = false;
-    this.filterOpenOnlyDraft = false;
-    this.contextRepairId = '';
-    this.contextRepairIdDraft = '';
-    this.catalogQuick = '';
-    this.catalogQuickDraft = '';
-    // 依 view 給預設排序
-    this.sortKey = (this.view === 'catalog') ? 'name_asc' : 'updatedAt_desc';
-    this.sortKeyDraft = this.sortKey;
-
-    this._scheduleUpdate();
-  }
-
-
   render(containerId) {
     const el = document.getElementById(containerId);
     if (!el) return;
@@ -205,8 +179,11 @@ class PartsUI {
             </div>
 
             <div class="parts-search">
-              <input class="input" type="text" placeholder="${this._escapeAttr(searchPlaceholder)}" value="${this._escapeAttr(this.searchDraft)}" oninput="PartsUI.onSearchDraft(event)" />
+              <input class="input" type="text" placeholder="${this._escapeAttr(searchPlaceholder)}" value="${this._escapeAttr(this.searchDraft)}" oninput="PartsUI.onSearchDraft(event)" onkeydown="PartsUI.onSearchKeydown(event)" />
             </div>
+
+            <button class="btn primary" onclick="PartsUI.applyAll()">搜尋</button>
+            <button class="btn" onclick="PartsUI.clearAll()">清除</button>
 
             <button class="btn" id="parts-toggle-filters-btn" onclick="PartsUI.toggleFilters()">🔍 ${this.filtersPanelOpen ? '▾ 收合篩選' : '▸ 開啟篩選'}${this._activeFiltersCount() ? ` (${this._activeFiltersCount()})` : ''}</button>
 
@@ -221,7 +198,8 @@ class PartsUI {
               <div class="panel-title"><strong>篩選</strong><span class="muted" style="margin-left:10px;">可多條件組合</span></div>
             </div>
             <div class="panel-right">
-              <button class="btn" onclick="PartsUI.clearFilters()">清除</button>
+              <button class="btn primary" onclick="PartsUI.applyAll()">搜尋</button>
+              <button class="btn" onclick="PartsUI.clearAll()">清除</button>
             </div>
           </div>
           <div class="parts-filters-body" id="parts-filters"></div>
@@ -258,6 +236,43 @@ class PartsUI {
     if (!t1 || !t2) return;
     t1.classList.toggle('active', this.view === 'tracker');
     t2.classList.toggle('active', this.view === 'catalog');
+  }
+
+  applyAll() {
+    this.searchText = (this.searchDraft || '').toString().trim();
+    this.sortKey = (this.sortKeyDraft || this.sortKey || 'updatedAt_desc').toString().trim() || 'updatedAt_desc';
+    this.contextRepairId = (this.contextRepairIdDraft || '').toString().trim();
+
+    if (this.view === 'catalog') {
+      this.catalogQuick = (this.catalogQuickDraft || '').toString().trim();
+    } else {
+      this.filterStatus = (this.filterStatusDraft || '').toString().trim();
+      this.filterOverdue = !!this.filterOverdueDraft;
+      this.filterOpenOnly = !!this.filterOpenOnlyDraft;
+    }
+    this.update();
+  }
+
+  clearAll() {
+    this.searchDraft = '';
+    this.searchText = '';
+    this.sortKeyDraft = 'updatedAt_desc';
+    this.sortKey = 'updatedAt_desc';
+
+    this.contextRepairIdDraft = '';
+    this.contextRepairId = '';
+
+    this.catalogQuickDraft = '';
+    this.catalogQuick = '';
+    this.filterStatusDraft = '';
+    this.filterStatus = '';
+    this.filterOverdueDraft = false;
+    this.filterOverdue = false;
+    this.filterOpenOnlyDraft = false;
+    this.filterOpenOnly = false;
+
+    try { this._updateFiltersToggleButton?.(); } catch (_) {}
+    this.update();
   }
 
   async update() {
@@ -552,7 +567,7 @@ class PartsUI {
             <div class="filter-group">
               <label class="form-label">狀態</label>
               <select class="input" onchange="PartsUI.setCatalogStatusFilter(event)">
-                <option value="" ${(this.catalogQuickDraft || '').toString().trim() ? '' : 'selected'}>全部</option>
+                <option value="" ${this.catalogQuick ? '' : 'selected'}>全部</option>
                 <option value="ACTIVE" ${this.catalogQuick === 'ACTIVE' ? 'selected' : ''}>啟用</option>
                 <option value="INACTIVE" ${this.catalogQuick === 'INACTIVE' ? 'selected' : ''}>停用</option>
               </select>
@@ -560,11 +575,11 @@ class PartsUI {
             <div class="filter-group">
               <label class="form-label">排序</label>
               <select class="input" onchange="PartsUI.setSort(event)">
-                <option value="updatedAt_desc" ${this.sortKeyDraft === 'updatedAt_desc' ? 'selected' : ''}>最近更新</option>
+                <option value="updatedAt_desc" ${this.sortKey === 'updatedAt_desc' ? 'selected' : ''}>最近更新</option>
                 <option value="stockQty_asc" ${this.sortKey === 'stockQty_asc' ? 'selected' : ''}>庫存（少→多）</option>
                 <option value="stockQty_desc" ${this.sortKey === 'stockQty_desc' ? 'selected' : ''}>庫存（多→少）</option>
                 <option value="unitPrice_desc" ${this.sortKey === 'unitPrice_desc' ? 'selected' : ''}>單價（高→低）</option>
-                <option value="name_asc" ${this.sortKeyDraft === 'name_asc' ? 'selected' : ''}>名稱（A→Z）</option>
+                <option value="name_asc" ${this.sortKey === 'name_asc' ? 'selected' : ''}>名稱（A→Z）</option>
               </select>
             </div>
           </div>
@@ -597,8 +612,8 @@ class PartsUI {
           <div class="filter-group">
             <label class="form-label">狀態（詳細）</label>
             <select class="input" onchange="PartsUI.setStatusFilter(event)">
-              <option value="" ${(this.filterStatusDraft || "").toString().trim() ? "" : "selected"}>全部</option>
-              ${statuses.map(v => `<option value="${this._escapeAttr(v)}" ${this.filterStatusDraft === v ? 'selected' : ''}>${this._escapeHtml(v)}</option>`).join('')}
+              <option value="" ${this.filterStatus ? '' : 'selected'}>全部</option>
+              ${statuses.map(v => `<option value="${this._escapeAttr(v)}" ${this.filterStatus === v ? 'selected' : ''}>${this._escapeHtml(v)}</option>`).join('')}
             </select>
           </div>
 
@@ -612,7 +627,7 @@ class PartsUI {
           <div class="filter-group">
             <label class="form-label">排序</label>
             <select class="input" onchange="PartsUI.setSort(event)">
-              <option value="updatedAt_desc" ${this.sortKeyDraft === 'updatedAt_desc' ? 'selected' : ''}>最近更新</option>
+              <option value="updatedAt_desc" ${this.sortKey === 'updatedAt_desc' ? 'selected' : ''}>最近更新</option>
               <option value="expectedDate_asc" ${this.sortKey === 'expectedDate_asc' ? 'selected' : ''}>預計（近→遠）</option>
               <option value="status_asc" ${this.sortKey === 'status_asc' ? 'selected' : ''}>狀態（A→Z）</option>
               <option value="amount_desc" ${this.sortKey === 'amount_desc' ? 'selected' : ''}>金額（高→低）</option>
@@ -652,6 +667,7 @@ class PartsUI {
     }
   }
 
+
   _renderTracker() {
     const baseRows = this._getTrackerBaseRows();
     let rows = (baseRows || []).slice();
@@ -664,79 +680,193 @@ class PartsUI {
 
     if (!rows.length) return `<div class="empty-state">目前沒有資料</div>`;
 
+    // 若查詢條件改變，重置分頁顯示數量
+    const sig = `${this.view}|${this.filterStatus}|${this.filterOverdue ? '1' : '0'}|${this.filterOpenOnly ? '1' : '0'}|${this.sortKey}|${this.contextRepairId || ''}`;
+    if (sig !== this._querySig) {
+      this._querySig = sig;
+      this.visibleCount = (window.ListPaging && typeof window.ListPaging.resetVisibleCount === 'function')
+        ? window.ListPaging.resetVisibleCount(this.pageSize)
+        : (this.pageSize || 60);
+    }
+
+    const total = rows.length;
+    const visible = rows.slice(0, Math.min(this.visibleCount || this.pageSize || 60, total));
+    const hasMore = visible.length < total;
+
+    const token = ++this._renderToken;
+
+    // Shell：先出骨架，再增量塞卡片
+    const shell = `
+      <div class="parts-tracker-shell">
+        <div class="card-list parts-tracker-cards is-rendering" id="parts-tracker-cards">${this._renderLoadingCards()}</div>
+        <div class="parts-list-footer" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 4px;">
+          <div class="muted">已顯示 <span class="mono">${visible.length}</span> / <span class="mono">${total}</span></div>
+          <div>
+            ${hasMore ? `<button class="btn" onclick="PartsUI.loadMore()">顯示更多</button>` : `<span class="muted">已顯示全部</span>`}
+          </div>
+        </div>
+      </div>
+    `;
+
+    // 延後真正渲染（避免同步 return 大量字串）
+    try {
+      requestAnimationFrame(() => {
+        const cardsEl = document.getElementById('parts-tracker-cards');
+        if (!cardsEl) return;
+        this.renderCardsIncrementally(visible, cardsEl, token);
+      });
+    } catch (_) {}
+
+    return shell;
+  }
+
+  _renderLoadingCards() {
+    const isMobile = (window.AppConfig && window.AppConfig.device && typeof window.AppConfig.device.isMobile === 'function')
+      ? window.AppConfig.device.isMobile()
+      : (window.innerWidth <= 640);
+    const n = isMobile ? 6 : 8;
+    return Array.from({ length: n }).map(() => `
+      <div class="card accent-left placeholder" style="--module-accent:rgba(148,163,184,0.7);--module-accent-soft:rgba(148,163,184,0.12);--accent-opacity:.45;">
+        <div class="card-head">
+          <div style="min-width:0;flex:1">
+            <div class="ph ph-line w-40"></div>
+            <div class="ph ph-line w-70" style="margin-top:10px;"></div>
+          </div>
+          <div class="ph ph-badges" style="margin-left:12px;"></div>
+        </div>
+        <div class="card-body">
+          <div class="ph ph-line w-90"></div>
+          <div class="ph ph-line w-60" style="margin-top:10px;"></div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  renderCardsIncrementally(rows, cardsEl, token) {
+    if (!cardsEl) return;
+    const list = Array.isArray(rows) ? rows : [];
+
+    // 若 token 已變更（新的渲染請求），直接停止
+    const isValid = () => token === this._renderToken;
+
+    const total = list.length;
+    const batchSize = Number(AppConfig?.system?.performance?.incrementalRenderBatchSize || 50);
+    const frameBudgetMs = 10;
+
+    let i = 0;
+    let cleared = false; // Phase 4 Fix: first frame must clear placeholder skeletons
+    const step = () => {
+      if (!isValid()) return;
+
+      // 清空骨架（placeholder）只做一次；避免出現「一堆空白卡」
+      if (!cleared) {
+        cardsEl.innerHTML = '';
+        cleared = true;
+      }
+
+      const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      let html = '';
+
+      for (let c = 0; c < batchSize && i < total; c++, i++) {
+        html += this._renderTrackerCard(list[i]);
+        const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        if ((now - t0) >= frameBudgetMs) break;
+      }
+
+      if (!isValid()) return;
+
+      if (html) cardsEl.insertAdjacentHTML('beforeend', html);
+
+      if (i < total) {
+        requestAnimationFrame(step);
+      } else {
+        cardsEl.classList.remove('is-rendering');
+      }
+    };
+
+    cardsEl.classList.add('is-rendering');
+    requestAnimationFrame(step);
+  }
+
+  async loadMore() {
+    const y = (typeof window !== 'undefined') ? (window.scrollY || 0) : 0;
+    this.visibleCount = (window.ListPaging && typeof window.ListPaging.nextVisibleCount === 'function')
+      ? window.ListPaging.nextVisibleCount(this.visibleCount, this.pageSize)
+      : ((this.visibleCount || this.pageSize || 60) + (this.pageSize || 60));
+    this._renderList();
+    try {
+      requestAnimationFrame(() => window.scrollTo({ top: y, behavior: 'auto' }));
+    } catch (_) {}
+  }
+
+  _renderTrackerCard(c) {
+    const rid = (c?.repairId || '').toString().trim();
+    const repair = (window.RepairService && typeof window.RepairService.get === 'function') ? window.RepairService.get(rid) : null;
+    const repairNo = (repair?.repairNo || rid || '').toString();
+    const customer = (repair?.customer || '').toString();
+    const machine = (repair?.machine || '').toString();
+    const labelTop = `${customer || '-'}${machine ? ' · ' + machine : ''}`;
+
+    const safeRid = this._escapeAttr(rid);
+
+    const isOverdue = !!c?.isOverdue;
+    const accent = isOverdue ? { accent: '#b45309', soft: 'rgba(217,119,6,.15)' } : this._accentForPartStatus(c?.status);
+
+    const items = Array.isArray(c?.items) ? c.items : [];
+    const preview = (() => {
+      const max = 4;
+      const list = items.slice(0, max).map(it => {
+        const name = (it?.partName || '(未命名零件)').toString();
+        const qty = (it?.qty || 1);
+        const unit = (it?.unit || 'pcs');
+        const st = (it?.status || '').toString().trim();
+        return `${name} ×${qty} ${unit}${st ? `（${st}）` : ''}`;
+      });
+      if (items.length > max) list.push(`...（+${items.length - max}）`);
+      return list.join(' / ');
+    })();
+
+    const qids = Array.isArray(c?.quoteIds) ? c.quoteIds.filter(Boolean) : [];
+    const oids = Array.isArray(c?.orderIds) ? c.orderIds.filter(Boolean) : [];
+    const qidOne = (qids.length === 1) ? qids[0] : '';
+    const oidOne = (oids.length === 1) ? oids[0] : '';
+
+    const updated = (c?.updatedAt || '').toString().slice(0, 10);
+
     return `
-      <div class="card-list">
-        ${rows.map(c => {
-          const rid = (c?.repairId || '').toString().trim();
-          const repair = (window.RepairService && typeof window.RepairService.get === 'function') ? window.RepairService.get(rid) : null;
-          const repairNo = (repair?.repairNo || rid || '').toString();
-          const customer = (repair?.customer || '').toString();
-          const machine = (repair?.machine || '').toString();
-          const labelTop = `${customer || '-'}${machine ? ' · ' + machine : ''}`;
+      <div class="card accent-left" style="--module-accent:${this._escapeAttr(accent.accent)};--module-accent-soft:${this._escapeAttr(accent.soft)};${isOverdue ? '--accent-opacity:.95;' : '--accent-opacity:.70;'}">
+        <div class="card-head">
+          <div style="min-width:0;">
+            <div class="card-title">${this._escapeHtml(repairNo || rid)}</div>
+            <div class="muted parts-card-sub">${this._escapeHtml(labelTop)}</div>
+          </div>
+          <div class="card-head-right">
+            ${isOverdue ? `<span class="badge custom" style="--badge-color:#b45309;">逾期</span>` : ''}
+            <span class="badge custom" style="--badge-color:${this._escapeAttr(accent.accent)};">${this._escapeHtml((c?.status || '需求提出'))}</span>
+            <span class="badge">${this._escapeHtml(c?.totalItems || 0)} 項</span>
+            <span class="badge">${this._escapeHtml(c?.totalQty || 0)} pcs</span>
+            <span class="badge">$ ${this._escapeHtml(Math.round(Number(c?.totalAmount || 0) * 100) / 100)}</span>
+          </div>
+        </div>
 
-          const safeRid = this._escapeAttr(rid);
+        <div class="card-body">
+          <div class="meta-grid">
+            <div class="meta-item"><div class="meta-k">待處理</div><div class="meta-v">${this._escapeHtml(c?.openItems || 0)} 項</div></div>
+            <div class="meta-item"><div class="meta-k">預計最早</div><div class="meta-v">${this._escapeHtml(c?.expectedDate || '-')}</div></div>
+            <div class="meta-item"><div class="meta-k">最後更新</div><div class="meta-v">${this._escapeHtml(updated || '-')}</div></div>
+            ${qids.length ? `<div class="meta-item"><div class="meta-k">報價</div><div class="meta-v">${this._escapeHtml(qidOne || ('多筆（' + qids.length + '）'))}</div></div>` : ''}
+            ${oids.length ? `<div class="meta-item"><div class="meta-k">訂單</div><div class="meta-v">${this._escapeHtml(oidOne || ('多筆（' + oids.length + '）'))}</div></div>` : ''}
+          </div>
+          ${preview ? `<div class="muted" style="margin-top:8px;white-space:normal;line-height:1.4;">${this._escapeHtml(preview)}</div>` : ''}
+        </div>
 
-          const isOverdue = !!c?.isOverdue;
-          const accent = isOverdue ? { accent: '#b45309', soft: 'rgba(217,119,6,.15)' } : this._accentForPartStatus(c?.status);
-
-          const items = Array.isArray(c?.items) ? c.items : [];
-          const preview = (() => {
-            const max = 4;
-            const list = items.slice(0, max).map(it => {
-              const name = (it?.partName || '(未命名零件)').toString();
-              const qty = (it?.qty || 1);
-              const unit = (it?.unit || 'pcs');
-              const st = (it?.status || '').toString().trim();
-              return `${name} ×${qty} ${unit}${st ? `（${st}）` : ''}`;
-            });
-            if (items.length > max) list.push(`...（+${items.length - max}）`);
-            return list.join(' / ');
-          })();
-
-          const qids = Array.isArray(c?.quoteIds) ? c.quoteIds.filter(Boolean) : [];
-          const oids = Array.isArray(c?.orderIds) ? c.orderIds.filter(Boolean) : [];
-          const qidOne = (qids.length === 1) ? qids[0] : '';
-          const oidOne = (oids.length === 1) ? oids[0] : '';
-
-          const updated = (c?.updatedAt || '').toString().slice(0, 10);
-
-          return `
-            <div class="card accent-left" style="--module-accent:${this._escapeAttr(accent.accent)};--module-accent-soft:${this._escapeAttr(accent.soft)};${isOverdue ? '--accent-opacity:.95;' : '--accent-opacity:.70;'}">
-              <div class="card-head">
-                <div style="min-width:0;">
-                  <div class="card-title">${this._escapeHtml(repairNo || rid)}</div>
-                  <div class="muted parts-card-sub">${this._escapeHtml(labelTop)}</div>
-                </div>
-                <div class="card-head-right">
-                  ${isOverdue ? `<span class="badge custom" style="--badge-color:#b45309;">逾期</span>` : ''}
-                  <span class="badge custom" style="--badge-color:${this._escapeAttr(accent.accent)};">${this._escapeHtml((c?.status || '需求提出'))}</span>
-                  <span class="badge">${this._escapeHtml(c?.totalItems || 0)} 項</span>
-                  <span class="badge">${this._escapeHtml(c?.totalQty || 0)} pcs</span>
-                  <span class="badge">$ ${this._escapeHtml(Math.round(Number(c?.totalAmount || 0) * 100) / 100)}</span>
-                </div>
-              </div>
-
-              <div class="card-body">
-                <div class="meta-grid">
-                  <div class="meta-item"><div class="meta-k">待處理</div><div class="meta-v">${this._escapeHtml(c?.openItems || 0)} 項</div></div>
-                  <div class="meta-item"><div class="meta-k">預計最早</div><div class="meta-v">${this._escapeHtml(c?.expectedDate || '-')}</div></div>
-                  <div class="meta-item"><div class="meta-k">最後更新</div><div class="meta-v">${this._escapeHtml(updated || '-')}</div></div>
-                  ${qids.length ? `<div class="meta-item"><div class="meta-k">報價</div><div class="meta-v">${this._escapeHtml(qidOne || ('多筆（' + qids.length + '）'))}</div></div>` : ''}
-                  ${oids.length ? `<div class="meta-item"><div class="meta-k">訂單</div><div class="meta-v">${this._escapeHtml(oidOne || ('多筆（' + oids.length + '）'))}</div></div>` : ''}
-                </div>
-                ${preview ? `<div class="muted" style="margin-top:8px;white-space:normal;line-height:1.4;">${this._escapeHtml(preview)}</div>` : ''}
-              </div>
-
-              <div class="card-foot">
-                <button class="btn sm" onclick="PartsUI.openRepairPartsEditor('${safeRid}')">編輯用料/更換</button>
-                ${qidOne ? `<button class="btn sm" onclick="PartsUI.openQuote('${this._escapeAttr(qidOne)}')">開啟報價</button>` : ''}
-                ${oidOne ? `<button class="btn sm" onclick="PartsUI.openOrder('${this._escapeAttr(oidOne)}')">開啟訂單</button>` : ''}
-                <button class="btn sm" onclick="PartsUI.openRepair('${safeRid}')">開啟維修單</button>
-                <button class="btn sm danger" onclick="PartsUI.confirmRemoveRepairCase('${safeRid}')">刪除案例</button>
-              </div>
-            </div>
-          `;
-        }).join('')}
+        <div class="card-foot">
+          <button class="btn sm" onclick="PartsUI.openRepairPartsEditor('${safeRid}')">編輯用料/更換</button>
+          ${qidOne ? `<button class="btn sm" onclick="PartsUI.openQuote('${this._escapeAttr(qidOne)}')">開啟報價</button>` : ''}
+          ${oidOne ? `<button class="btn sm" onclick="PartsUI.openOrder('${this._escapeAttr(oidOne)}')">開啟訂單</button>` : ''}
+          <button class="btn sm" onclick="PartsUI.openRepair('${safeRid}')">開啟維修單</button>
+          <button class="btn sm danger" onclick="PartsUI.confirmRemoveRepairCase('${safeRid}')">刪除案例</button>
+        </div>
       </div>
     `;
   }
@@ -1213,66 +1343,99 @@ Object.assign(PartsUI, {
   },
 
   clearFilters() {
-    if (!window.partsUI) return;
-    const ui = window.partsUI;
-    if (ui.view === 'catalog') {
-      ui.catalogQuick = '';
-    } else {
-      ui.filterStatus = '';
-      ui.filterOverdue = false;
-      ui.filterOpenOnly = false;
-    }
-    ui._updateFiltersToggleButton();
-    ui.update();
+    // 已改為方案2：清除立即套用
+    PartsUI.clearAll();
   },
 
   setView(view) {
     if (!window.partsUI) return;
     const ui = window.partsUI;
-    const v = (view || 'tracker').toString().trim();
-    ui.view = (v === 'catalog') ? 'catalog' : 'tracker';
-    ui.filtersPanelOpen = ui._loadFiltersPanelOpen(ui.view);
-
-    if (ui.view === 'catalog') {
-      if (!['name_asc','mpn_asc','vendor_asc','usage_desc'].includes(ui.sortKey)) {
-        ui.sortKey = 'name_asc';
+    ui.view = view;
+    ui.filtersPanelOpen = ui._loadFiltersPanelOpen(view);
+    ui._applyFiltersPanelVisibility();
+    // 切換分頁時重置「另一個分頁」的快速篩選，避免視覺/資料混淆
+    if (view === 'catalog') {
+      ui.filterStatus = ''; ui.filterStatusDraft = ''; 
+      ui.filterOverdue = false;
+      ui.filterOpenOnly = false;
+      // catalog 預設排序
+      if (!ui.sortKey || !['updatedAt_desc','stockQty_asc','stockQty_desc','unitPrice_desc','name_asc'].includes(ui.sortKey)) {
+        ui.sortKey = 'updatedAt_desc';
       }
     } else {
-      if (!['updatedAt_desc','expectedDate_asc','status_asc','amount_desc'].includes(ui.sortKey)) {
+      ui.catalogQuick = '';
+      if (!ui.sortKey || !['updatedAt_desc','expectedDate_asc','status_asc','amount_desc'].includes(ui.sortKey)) {
         ui.sortKey = 'updatedAt_desc';
       }
     }
-    ui.sortKeyDraft = ui.sortKey;
+    ui.update();
+  },
 
-    // 同步草稿
-    ui.searchDraft = ui.searchText;
-    ui.filterStatusDraft = ui.filterStatus;
-    ui.filterOverdueDraft = ui.filterOverdue;
-    ui.filterOpenOnlyDraft = ui.filterOpenOnly;
-    ui.contextRepairIdDraft = ui.contextRepairId;
-    ui.catalogQuickDraft = ui.catalogQuick;
-
-    ui._scheduleUpdate();
+  onSearch(event) {
+    // 已改為方案2：保留相容舊呼叫但不再即時套用
+    const v = (event?.target?.value || '').toString();
+    window.partsUI.searchDraft = v;
   },
 
   setStatusFilter(event) {
+    if (!window.partsUI) return;
     const ui = window.partsUI;
-    if (!ui) return;
     ui.filterStatusDraft = (event?.target?.value || '').toString().trim();
     ui.filterOverdueDraft = false;
     ui.filterOpenOnlyDraft = false;
   },
 
   setCatalogStatusFilter(event) {
+    if (!window.partsUI) return;
     const ui = window.partsUI;
-    if (!ui) return;
     ui.catalogQuickDraft = (event?.target?.value || '').toString().trim();
+  },
+
+  setQuickFilter(key) {
+    if (!window.partsUI) return;
+    const ui = window.partsUI;
+    const k = (key || '').toString().trim();
+    if (ui.view === 'catalog') {
+      ui.catalogQuick = k;
+      ui.catalogQuickDraft = k;
+      ui.update();
+      return;
+    }
+
+    // tracker
+    if (!k) {
+      ui.filterStatus = ''; ui.filterStatusDraft = ''; 
+      ui.filterOverdue = false;
+      ui.filterOpenOnly = false;
+    } else if (k === 'OPEN') {
+      ui.filterStatus = ''; ui.filterStatusDraft = ''; 
+      ui.filterOverdue = false;
+      ui.filterOpenOnly = true; ui.filterOpenOnlyDraft = true;
+    } else if (k === 'OVERDUE') {
+      ui.filterStatus = ''; ui.filterStatusDraft = ''; 
+      ui.filterOverdue = true; ui.filterOverdueDraft = true;
+      ui.filterOpenOnly = false;
+    } else {
+      ui.filterStatus = k; ui.filterStatusDraft = k;
+      ui.filterOverdue = false;
+      ui.filterOpenOnly = false;
+    }
+    ui.update();
+  },
+
+  setSort(event) {
+    if (!window.partsUI) return;
+    window.partsUI.sortKeyDraft = (event?.target?.value || '').toString().trim() || 'updatedAt_desc';
+  },
+
+  setRepairFilter(event) {
+    if (!window.partsUI) return;
+    window.partsUI.contextRepairIdDraft = (event?.target?.value || '').toString().trim();
   },
 
   clearRepairFilter() {
     if (!window.partsUI) return;
-    window.partsUI.contextRepairId = '';
-    window.partsUI.update();
+    window.partsUI.contextRepairIdDraft = '';
   },
 
   openCreate() {

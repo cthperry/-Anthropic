@@ -31,21 +31,22 @@ class KBUI {
     try { return (window.StringUtils?.escapeHTML ? window.StringUtils.escapeHTML(s) : String(s||'')); } catch (_) { return String(s||''); }
   }
 
+  _escapeAttr(input) {
+    const s = (input === null || input === undefined) ? '' : String(input);
+    // 避免 value="..." 斷裂；同時移除換行避免屬性注入
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .split('\n').join(' ')
+      .split('\r').join(' ');
+  }
+
   _getService(){
     return (typeof window._svc === 'function') ? window._svc('KBService') : window.KBService;
   }
-
-  applyFilters() {
-    this.searchText = (this.searchDraft || '').toString().trim();
-    this.updateList();
-  }
-
-  clearSearch() {
-    this.searchText = '';
-    this.searchDraft = '';
-    this.updateList();
-  }
-
 
   render(containerId = 'main-content'){
     this._renderedContainerId = containerId;
@@ -61,9 +62,9 @@ class KBUI {
             <div class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">FAQ / 故障模式 / SOP / 案例</div>
           </div>
           <div class="module-toolbar-right">
-            <input id="kb-search" class="input" style="max-width:360px" placeholder="搜尋：關鍵字 / Tag / 設備 / 料號..." value="${this._escape(this.searchDraft || '')}" oninput="KBUI.onSearchDraft(event)" />
-            <button class="btn" onclick="KBUI.applyFilters()">🔍 搜尋</button>
-            <button class="btn" onclick="KBUI.clearSearch()">🧹 清除</button>
+            <input id="kb-search" class="input" style="max-width:360px" placeholder="搜尋：關鍵字 / Tag / 設備 / 料號..." value="${this._escapeAttr(this.searchDraft || '')}" oninput="KBUI.onSearchDraft(event)" onkeydown="KBUI.onSearchKeydown(event)" />
+            <button class="btn" onclick="KBUI.applySearch()">搜尋</button>
+            <button class="btn ghost" onclick="KBUI.clearAll()">清除</button>
             <button class="btn primary" onclick="KBUI.openCreate()">＋ 新增</button>
           </div>
         </div>
@@ -140,9 +141,37 @@ class KBUI {
     this._renderTagChips();
     this.updateList();
   }
-  handleSearch(ev) {
+
+  onSearchDraft(ev){
     const v = (ev?.target?.value || '').toString();
     this.searchDraft = v;
+  }
+
+  onSearchKeydown(ev){
+    const key = ev?.key || ev?.keyCode;
+    if (key === 'Enter' || key === 13) {
+      try { ev.preventDefault(); } catch (_) {}
+      this.applySearch();
+    }
+  }
+
+  applySearch(){
+    this.searchText = (this.searchDraft || '').toString();
+    this.updateList();
+  }
+
+  clearAll(){
+    this.searchDraft = '';
+    this.searchText = '';
+    this.selectedTags.clear();
+    try { const inp = document.getElementById('kb-search'); if (inp) inp.value = ''; } catch (_) {}
+    this._renderTagChips();
+    this.updateList();
+  }
+
+  // 相容舊呼叫（避免其他地方仍呼叫 handleSearch）
+  handleSearch(ev){
+    this.onSearchDraft(ev);
   }
 
   toggleTag(tag){
@@ -574,15 +603,24 @@ Object.assign(KBUI, {
   },
 
   onSearchDraft(ev) {
+    try { window.kbUI?.onSearchDraft?.(ev); } catch (e) { console.error(e); }
+  },
+
+  onSearchKeydown(ev) {
+    try { window.kbUI?.onSearchKeydown?.(ev); } catch (e) { console.error(e); }
+  },
+
+  applySearch() {
+    try { window.kbUI?.applySearch?.(); } catch (e) { console.error(e); }
+  },
+
+  clearAll() {
+    try { window.kbUI?.clearAll?.(); } catch (e) { console.error(e); }
+  },
+
+  // 相容舊呼叫
+  handleSearch(ev) {
     try { window.kbUI?.handleSearch?.(ev); } catch (e) { console.error(e); }
-  },
-
-  applyFilters() {
-    try { window.kbUI?.applyFilters?.(); } catch (e) { console.error(e); }
-  },
-
-  clearSearch() {
-    try { window.kbUI?.clearSearch?.(); } catch (e) { console.error(e); }
   },
 
   toggleTag(tag) {
