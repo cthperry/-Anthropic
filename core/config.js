@@ -8,9 +8,9 @@ const AppConfig = {
   // 版本資訊
   // ========================================
   VERSION: 'V161',
-  VERSION_DATE: '2026-02-03',
+  VERSION_DATE: '2026-02-09',
   VERSION_NAME: 'Modular Phoenix',
-  BUILD_NUMBER: '226',
+  BUILD_NUMBER: '241',
   
   // ========================================
   // Firebase 配置
@@ -309,9 +309,9 @@ const AppConfig = {
 
     let custom = {};
     try {
-      const ss = (typeof window !== 'undefined' && typeof window._svc === 'function')
-        ? window._svc('SettingsService')
-        : (typeof window !== 'undefined' ? window.SettingsService : null);
+      const ss = (typeof window !== 'undefined' && window.AppRegistry && typeof window.AppRegistry.get === 'function')
+        ? window.AppRegistry.get('SettingsService')
+        : ((typeof window !== 'undefined' && typeof window._svc === 'function') ? window._svc('SettingsService') : null);
       const s = (ss && ss.settings) ? ss.settings : null;
       const c = s && s.machineCatalog && typeof s.machineCatalog === 'object' ? s.machineCatalog : null;
       if (c) custom = c;

@@ -583,9 +583,9 @@ const partService = new PartService();
 const repairPartsService = new RepairPartsService();
 
 if (typeof window !== 'undefined') {
-  window.PartService = partService;
+
   try { window.AppRegistry?.register?.('PartService', partService); } catch (_) {}
-  window.RepairPartsService = repairPartsService;
+
   try { window.AppRegistry?.register?.('RepairPartsService', repairPartsService); } catch (_) {}
 }
 

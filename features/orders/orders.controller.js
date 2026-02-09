@@ -19,11 +19,8 @@ class OrdersController {
     try {
       console.log('📦 Initializing Orders Module...');
 
-      if (window.OrderService && !window.OrderService.isInitialized) {
-        await window.OrderService.init();
-      }
-      if (window.QuoteService && !window.QuoteService.isInitialized) {
-        await window.QuoteService.init();
+      if (window.AppRegistry && typeof window.AppRegistry.ensureReady === 'function') {
+        await window.AppRegistry.ensureReady(['OrderService', 'QuoteService'], { loadAll: false });
       }
 
       window.ordersUI.render(containerId);
@@ -50,7 +47,13 @@ class OrdersController {
       console.error('❌ Orders Module initialization failed:', error);
       window.ErrorHandler?.log?.('HIGH', 'OrdersController', 'Initialization failed', { error });
       const container = document.getElementById(containerId);
-      if (container) container.innerHTML = this.getFallbackUI();
+      if (container) {
+        container.innerHTML = this.getFallbackUI();
+        try {
+          const btn = container.querySelector('[data-action="app.reload"]');
+          if (btn) btn.addEventListener('click', () => location.reload());
+        } catch (_) {}
+      }
       throw error;
     }
   }
@@ -61,7 +64,7 @@ class OrdersController {
         <div style="font-size:48px;margin-bottom:16px;">⚠️</div>
         <h3 style="color:#ef4444;margin-bottom:8px;">訂單模組載入失敗</h3>
         <p style="color:#475569;margin-bottom:20px;">系統無法載入訂單追蹤模組，請重新整理頁面或聯繫技術支援。</p>
-        <button onclick="location.reload()" class="btn primary">重新載入</button>
+        <button type="button" class="btn primary" data-action="app.reload">重新載入</button>
       </div>
     `;
   }

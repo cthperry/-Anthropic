@@ -135,7 +135,9 @@ class WeeklyService {
   getThisWeekRepairsText() {
     const uid = (window.AppState?.getUid?.() || window.currentUser?.uid || '');
 
-    const basis = (window.SettingsService?.settings?.weeklyThisWeekBasis === 'updated') ? 'updated' : 'created';
+    const settingsSvc = (typeof window._svc === 'function') ? window._svc('SettingsService') : (window.AppRegistry?.get?.('SettingsService') || null);
+
+    const basis = (settingsSvc?.settings?.weeklyThisWeekBasis === 'updated') ? 'updated' : 'created';
     const getBasisDate = (r) => {
       if (!r || typeof r !== 'object') return '';
       if (basis === 'created') {
@@ -150,9 +152,8 @@ class WeeklyService {
       if (!iso) return '';
       try { return WeeklyModel.toTaiwanDateString(new Date(iso)); } catch (_) { return ''; }
     };
-    const repairs = (window.RepairService && typeof window.RepairService.getAll === 'function')
-      ? window.RepairService.getAll()
-      : [];
+    const repairSvc = (typeof window._svc === 'function') ? window._svc('RepairService') : (window.AppRegistry?.get?.('RepairService') || null);
+    const repairs = (repairSvc && typeof repairSvc.getAll === 'function') ? repairSvc.getAll() : [];
 
     const start = this.weekStart;
     const end = this.weekEnd;
@@ -219,17 +220,24 @@ class WeeklyService {
 
     if (!rows.length) return '';
 
+    // 嘗試載入本週工作記錄（WorkLog），按 repairId 分組
+    let workLogsByRepair = {};
+    try {
+      const workLogSvc = (typeof window._svc === 'function') ? window._svc('WorkLogService') : (window.AppRegistry?.get?.('WorkLogService') || null);
+      if (workLogSvc && workLogSvc.isInitialized) {
+        const weekLogs = workLogSvc.getByDateRange(start, end);
+        workLogsByRepair = WorkLogModel.groupByRepairId(weekLogs);
+      }
+    } catch (e) {
+      console.warn('WeeklyService: WorkLog integration failed, fallback to content:', e);
+    }
+
     const lines = rows.map((r, i) => {
       const cust = (r.customer || '').trim();
       const machine = (r.machine || '').trim();
 
       // 問題描述（issue）：必須在週報中單獨呈現，不與工作內容混用
       const issue = (r.issue || '').trim();
-
-      // 週報「工作內容」必須顯示實際處理內容（不是問題描述）。
-      // content：維修單中的「工作內容/處理內容」（用於週報）
-      // 若未填，顯示（未填工作內容），不要回退到 issue，避免把問題描述誤當工作內容。
-      const workContent = (r.content || '').trim();
 
       const status = (r.status || '').trim();
       const prog = (Number.isFinite(Number(r.progress)) ? Number(r.progress) : 0);
@@ -240,9 +248,28 @@ class WeeklyService {
         ? `   問題描述:${issue}`
         : `   問題描述：（未填）`;
 
-      const workBlock = workContent
-        ? formatLabeledBlock('工作內容：', workContent, '   ')
-        : ['   工作內容：', '      （未填）'].join('\n');
+      // 優先使用 WorkLog 記錄，無則退回 content 欄位（舊資料相容）
+      let workBlock;
+      const repairLogs = workLogsByRepair[r.id];
+      if (repairLogs && repairLogs.length > 0) {
+        // 有 WorkLog：逐筆顯示時間線
+        const logLines = repairLogs.map(log => {
+          const date = (log.workDate || '').slice(5); // MM-DD
+          const action = (log.action || '').trim().slice(0, 120);
+          const resultCfg = (window.WorkLogModel && window.WorkLogModel.getResultConfig)
+            ? window.WorkLogModel.getResultConfig(log.result)
+            : null;
+          const tag = resultCfg ? resultCfg.label : '';
+          return `      [${date}] ${action}${tag ? ' → ' + tag : ''}`;
+        });
+        workBlock = ['   工作記錄：', ...logLines].join('\n');
+      } else {
+        // 無 WorkLog：退回舊 content 欄位
+        const workContent = (r.content || '').trim();
+        workBlock = workContent
+          ? formatLabeledBlock('工作內容：', workContent, '   ')
+          : ['   工作內容：', '      （未填）'].join('\n');
+      }
 
       const st = `   完成狀態：${status || '進行中'} (${prog}%)`;
 
@@ -293,8 +320,9 @@ class WeeklyService {
   }
 
   async getRecipientsAndSignature() {
-    const settings = (window.SettingsService && typeof window.SettingsService.getSettings === 'function')
-      ? await window.SettingsService.getSettings()
+    const settingsSvc = (typeof window._svc === 'function') ? window._svc('SettingsService') : (window.AppRegistry?.get?.('SettingsService') || null);
+    const settings = (settingsSvc && typeof settingsSvc.getSettings === 'function')
+      ? await settingsSvc.getSettings()
       : null;
 
     const recipients = (settings && settings.weeklyRecipients)
@@ -330,6 +358,5 @@ class WeeklyService {
 
 // 全域實例
 const weeklyService = new WeeklyService();
-window.WeeklyService = weeklyService;
-  try { window.AppRegistry?.register?.('WeeklyService', weeklyService); } catch (_) {}
+try { window.AppRegistry?.register?.('WeeklyService', weeklyService); } catch (_) {}
 console.log('✅ WeeklyService loaded');

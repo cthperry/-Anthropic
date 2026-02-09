@@ -3,6 +3,9 @@
  * V161 - Weekly Module - UI Layer
  */
 
+
+// Phase 1：registry-first 取得 Service（避免直接 window.XxxService）
+// 注意：本專案為非 module script（同一 global scope），避免宣告可重複載入時會衝突的 top-level const。
 class WeeklyUI {
   constructor() {
     this.containerId = 'weekly-container';
@@ -14,13 +17,13 @@ class WeeklyUI {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    const start = window.WeeklyService.weekStart;
-    const end = window.WeeklyService.weekEnd;
+    const start = window._svc('WeeklyService').weekStart;
+    const end = window._svc('WeeklyService').weekEnd;
     const nextStart = WeeklyModel.addDays(start, 7);
     const nextEnd = WeeklyModel.addDays(end, 7);
     const isPreview = this.view === 'preview';
 
-    const basis = (window.SettingsService?.settings?.weeklyThisWeekBasis === 'updated') ? 'updated' : 'created';
+    const basis = (window._svc('SettingsService')?.settings?.weeklyThisWeekBasis === 'updated') ? 'updated' : 'created';
     const basisLabel = (basis === 'updated') ? '更新日' : '建立日';
 
     container.innerHTML = `
@@ -33,8 +36,8 @@ class WeeklyUI {
             </div>
           </div>
           <div class="module-toolbar-right">
-            <button class="btn ghost" onclick="WeeklyUI.togglePreview()" id="btn-weekly-preview">${isPreview ? '← 返回編輯' : '👁 預覽'}</button>
-            <button class="btn primary" onclick="WeeklyUI.send()">📧 寄送週報</button>
+            <button class="btn ghost" data-action="weekly-toggle-preview" id="btn-weekly-preview">${isPreview ? '← 返回編輯' : '👁 預覽'}</button>
+            <button class="btn primary" data-action="weekly-send">📧 寄送週報</button>
           </div>
         </div>
 
@@ -46,11 +49,11 @@ class WeeklyUI {
                   <div class="weekly-card-title card-title">本週工作（只讀）</div>
                   <div class="weekly-card-meta" id="thisweek-meta">來源：本週內${basisLabel}的維修單（負責人：登入者 UID）</div>
                 </div>
-                <select class="input" id="weekly-thisweek-basis" style="width:160px;" onchange="WeeklyUI.setThisWeekBasis(this.value)">
+                <select class="input" id="weekly-thisweek-basis" style="width:160px;">
                   <option value="created" ${basis !== 'updated' ? 'selected' : ''}>建立日（預設）</option>
                   <option value="updated" ${basis === 'updated' ? 'selected' : ''}>更新日</option>
                 </select>
-                <button class="btn" onclick="WeeklyUI.toggleThisWeek()" id="btn-toggle-thisweek">展開</button>
+                <button class="btn" data-action="weekly-toggle-thisweek" id="btn-toggle-thisweek">展開</button>
               </div>
               <div class="weekly-card-body card-body" id="thisweek-body" style="display:none;">
                 <pre class="weekly-pre" id="thisweek-text"></pre>
@@ -63,7 +66,7 @@ class WeeklyUI {
                   <div class="weekly-card-title card-title">下週計畫</div>
                   <div class="weekly-card-meta">（${WeeklyModel.formatDateCN(nextStart)} ~ ${WeeklyModel.formatDateCN(nextEnd)}）</div>
                 </div>
-                <button class="btn" onclick="WeeklyUI.addPlan()">＋ 新增</button>
+                <button class="btn" data-action="weekly-add-plan">＋ 新增</button>
               </div>
               <div class="weekly-card-body card-body" id="nextplans-body"></div>
             </div>
@@ -78,7 +81,7 @@ class WeeklyUI {
                 <div class="weekly-preview-meta">以下內容將以 mailto 寄送（不含收件人）。</div>
               </div>
               <div class="weekly-preview-actions">
-                <button class="btn" onclick="WeeklyUI.refreshPreview()">重新產生</button>
+                <button class="btn" data-action="weekly-refresh-preview">重新產生</button>
               </div>
             </div>
 
@@ -96,6 +99,8 @@ class WeeklyUI {
       </div>
     `;
 
+
+    this._bindDelegation(container);
     this.refresh();
     if (isPreview) {
       // 預覽模式立即產生一次預覽內容
@@ -106,7 +111,7 @@ class WeeklyUI {
   refresh() {
     const textEl = document.getElementById('thisweek-text');
     if (textEl) {
-      textEl.textContent = window.WeeklyService.getThisWeekRepairsText() || '(本週無維修單更新)';
+      textEl.textContent = window._svc('WeeklyService').getThisWeekRepairsText() || '(本週無維修單更新)';
     }
 
     this.renderPlans();
@@ -116,8 +121,8 @@ class WeeklyUI {
     const v = (value === 'updated') ? 'updated' : 'created';
 
     try {
-      if (window.SettingsService && typeof window.SettingsService.update === 'function') {
-        await window.SettingsService.update({ weeklyThisWeekBasis: v });
+      if (window._svc('SettingsService') && typeof window._svc('SettingsService').update === 'function') {
+        await window._svc('SettingsService').update({ weeklyThisWeekBasis: v });
       }
     } catch (e) {
       console.error('WeeklyUI setThisWeekBasis failed:', e);
@@ -139,7 +144,7 @@ class WeeklyUI {
     const host = document.getElementById('nextplans-body');
     if (!host) return;
 
-    const plans = window.WeeklyService.nextPlans || [];
+    const plans = window._svc('WeeklyService').nextPlans || [];
 
     host.innerHTML = plans
       .map((p, idx) => {
@@ -150,13 +155,13 @@ class WeeklyUI {
             <div class="plan-idx">${idx + 1}</div>
             <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
               <div class="plan-fields">
-                <input class="input" placeholder="客戶" value="${safe(p.customer)}" oninput="WeeklyUI.updatePlan('${safe(p.id)}','customer',this.value)" />
-                <input class="input" placeholder="專案/機型" value="${safe(p.project)}" oninput="WeeklyUI.updatePlan('${safe(p.id)}','project',this.value)" />
+                <input class="input" placeholder="客戶" value="${safe(p.customer)}" data-action="weekly-plan-update" data-plan-id="${safe(p.id)}" data-key="customer" />
+                <input class="input" placeholder="專案/機型" value="${safe(p.project)}" data-action="weekly-plan-update" data-plan-id="${safe(p.id)}" data-key="project" />
               </div>
-              <textarea class="input" rows="3" placeholder="計畫內容" oninput="WeeklyUI.updatePlan('${safe(p.id)}','plan',this.value)">${safe(p.plan)}</textarea>
+              <textarea class="input" rows="3" placeholder="計畫內容" data-action="weekly-plan-update" data-plan-id="${safe(p.id)}" data-key="plan">${safe(p.plan)}</textarea>
             </div>
             <div class="plan-actions">
-              <button class="btn danger" onclick="WeeklyUI.deletePlan('${safe(p.id)}')">刪除</button>
+              <button class="btn danger" data-action="weekly-plan-delete" data-plan-id="${safe(p.id)}">刪除</button>
             </div>
           </div>
         </div>
@@ -166,17 +171,17 @@ class WeeklyUI {
   }
 
   async addPlan() {
-    await window.WeeklyService.addPlanTop();
+    await window._svc('WeeklyService').addPlanTop();
     this.refresh();
   }
 
   async deletePlan(id) {
-    await window.WeeklyService.deletePlan(id);
+    await window._svc('WeeklyService').deletePlan(id);
     this.refresh();
   }
 
   async updatePlan(id, key, value) {
-    await window.WeeklyService.updatePlan(id, { [key]: value });
+    await window._svc('WeeklyService').updatePlan(id, { [key]: value });
   }
 
   toggleThisWeek() {
@@ -202,7 +207,7 @@ class WeeklyUI {
     bodyEl.textContent = '（產生中...）';
 
     try {
-      const { subject, body } = await window.WeeklyService.getEmail();
+      const { subject, body } = await window._svc('WeeklyService').getEmail();
       subjectEl.textContent = subject || '';
       bodyEl.textContent = body || '';
     } catch (e) {
@@ -212,7 +217,7 @@ class WeeklyUI {
   }
 
   async send() {
-    const { to, subject, body } = await window.WeeklyService.getEmail();
+    const { to, subject, body } = await window._svc('WeeklyService').getEmail();
     const href = WeeklyModel.encodeMailto(to, subject, body);
     window.location.href = href;
   }

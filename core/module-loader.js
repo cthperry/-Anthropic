@@ -88,8 +88,8 @@
   // route -> UI/controller/css（僅 UI 層延遲，model/service 仍維持預載）
   const manifest = {
     repairs: {
-      styles: ['features/repairs/repairs.css'],
-      scripts: ['features/repairs/repairs.ui.js', 'features/repairs/repairs.ui-forms.js', 'features/repairs/repairs.controller.js']
+      styles: ['features/repairs/repairs.css', 'features/worklogs/worklog.css'],
+      scripts: ['features/worklogs/worklog.ui.js', 'features/repairs/repairs.ui.js', 'features/repairs/repairs.ui-forms.js', 'features/repairs/repairs.controller.js']
     },
     machines: {
       styles: ['features/machines/machines.css'],

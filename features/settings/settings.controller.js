@@ -16,12 +16,19 @@ class SettingsController {
       try { window.settingsUI = new window.SettingsUI(); } catch (e) { console.warn('Init settingsUI failed', e); }
     }
 
-    if (!window.SettingsService || !window.settingsUI) {
+    const reg = window.AppRegistry;
+    if (reg && typeof reg.ensureReady === 'function') {
+      await reg.ensureReady(['SettingsService', 'RepairTemplatesService'], { loadAll: false });
+    }
+
+    const SettingsService = (reg && typeof reg.get === 'function')
+      ? reg.get('SettingsService')
+      : (typeof window._svc === 'function' ? window._svc('SettingsService') : null);
+
+    if (!SettingsService || !window.settingsUI) {
       throw new Error('Settings module not loaded');
     }
 
-    await window.SettingsService.init();
-      try { if (window.RepairTemplatesService) await window.RepairTemplatesService.init(); } catch (e) { console.warn('RepairTemplatesService init failed', e); }
     await window.settingsUI.render(containerId);
   }
 }

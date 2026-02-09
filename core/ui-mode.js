@@ -102,7 +102,10 @@
 
   async function initFromSettings() {
     try {
-      const ss = (typeof window._svc === 'function' ? window._svc('SettingsService') : window.SettingsService);
+      // Phase 1：統一 Service 存取走 registry-first（避免直接 window.SettingsService）
+      const ss = (typeof window._svc === 'function')
+        ? window._svc('SettingsService')
+        : (window.AppRegistry && typeof window.AppRegistry.get === 'function' ? window.AppRegistry.get('SettingsService') : null);
       if (!ss || typeof ss.getSettings !== 'function') {
         apply({ uiMode: MODES.STANDARD });
         return;

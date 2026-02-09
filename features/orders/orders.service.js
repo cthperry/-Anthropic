@@ -8,7 +8,8 @@ function _svc(name) {
     if (typeof window !== 'undefined') {
       if (window.getService && typeof window.getService === 'function') return window.getService(name);
       if (window.AppRegistry && typeof window.AppRegistry.get === 'function') return window.AppRegistry.get(name);
-      return window[name];
+      if (typeof window._svc === 'function') return window._svc(name);
+      return null;
     }
   } catch (_) {}
   return null;
@@ -711,7 +712,7 @@ async upsert(order) {
 
 const orderService = new OrderService();
 if (typeof window !== 'undefined') {
-  window.OrderService = orderService;
+
   try { window.AppRegistry?.register?.('OrderService', orderService); } catch (_) {}
 }
 

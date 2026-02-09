@@ -11,16 +11,23 @@ class WeeklyController {
       throw new Error('尚未登入');
     }
 
-    // 確保依賴
-    if (!window.WeeklyService || !window.weeklyUI) {
+    const reg = window.AppRegistry;
+    if (!reg || typeof reg.ensureReady !== 'function') {
+      throw new Error('AppRegistry not loaded');
+    }
+
+    // Phase 1：集中化初始化（避免 Controller 自行 init）
+    await reg.ensureReady(['SettingsService', 'RepairService', 'WorkLogService', 'WeeklyService'], { loadAll: true });
+
+    const WeeklyService = (typeof reg.get === 'function') ? reg.get('WeeklyService') : (typeof window._svc === 'function' ? window._svc('WeeklyService') : null);
+
+    if (!WeeklyService || !window.weeklyUI) {
       throw new Error('Weekly module not loaded');
     }
 
-    // init
-    await window.WeeklyService.init();
-
     // render
     window.weeklyUI.render(containerId);
+
   }
 }
 

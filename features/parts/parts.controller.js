@@ -17,11 +17,8 @@ class PartsController {
     try {
       console.log('🧩 Initializing Parts Module...');
 
-      if (window.PartService && !window.PartService.isInitialized) {
-        await window.PartService.init();
-      }
-      if (window.RepairPartsService && !window.RepairPartsService.isInitialized) {
-        await window.RepairPartsService.init();
+      if (window.AppRegistry && typeof window.AppRegistry.ensureReady === 'function') {
+        await window.AppRegistry.ensureReady(['PartService', 'RepairPartsService'], { loadAll: false });
       }
 
       // 先渲染 UI

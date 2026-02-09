@@ -3,16 +3,9 @@
  * V161 - Quotes Module - Service Layer
  */
 
-function _svc(name) {
-  try {
-    if (typeof window !== 'undefined') {
-      if (window.getService && typeof window.getService === 'function') return window.getService(name);
-      if (window.AppRegistry && typeof window.AppRegistry.get === 'function') return window.AppRegistry.get(name);
-      return window[name];
-    }
-  } catch (_) {}
-  return null;
-}
+
+// Phase 1：registry-first 取得 Service（避免直接 window.XxxService）
+// 注意：本專案為非 module script（同一 global scope），避免宣告可重複載入時會衝突的 top-level const。
 
 
 
@@ -690,8 +683,8 @@ getSummaryForRepair(repairId) {
       // customer：以維修單上的公司名稱為優先（支援客戶更名後仍可搜尋到舊報價）
       let repairCustomer = '';
       try {
-        repairCustomer = (window.RepairService && typeof window.RepairService.get === 'function')
-          ? (window.RepairService.get(x.repairId)?.customer || '')
+        repairCustomer = (window._svc('RepairService') && typeof window._svc('RepairService').get === 'function')
+          ? (window._svc('RepairService').get(x.repairId)?.customer || '')
           : '';
       } catch (_) {
         repairCustomer = '';
@@ -723,8 +716,8 @@ getSummaryForRepair(repairId) {
     await this.init();
     if (!repairId) throw new Error('repairId is required');
 
-    const repair = _svc('RepairService')?.get?.(repairId);
-    const parts = _svc('RepairPartsService')?.getForRepair?.(repairId) || [];
+    const repair = window._svc('RepairService')?.get?.(repairId);
+    const parts = window._svc('RepairPartsService')?.getForRepair?.(repairId) || [];
     const items = parts
       .filter(p => p && !p.isDeleted)
       .map(p => ({
@@ -784,12 +777,12 @@ getSummaryForRepair(repairId) {
 
     // 同步更新 repairParts：標記已報價 + quoteId
     try {
-      if (_svc('RepairPartsService')?.update) {
-        const list = _svc('RepairPartsService').getForRepair(repairId);
+      if (window._svc('RepairPartsService')?.update) {
+        const list = window._svc('RepairPartsService').getForRepair(repairId);
         for (const p of list) {
           if (!p || p.isDeleted) continue;
           if (p.status === '需求提出' || !p.status) {
-            await _svc('RepairPartsService').update(repairId, p.id, { status: '已報價', quoteId: quote.id });
+            await window._svc('RepairPartsService').update(repairId, p.id, { status: '已報價', quoteId: quote.id });
           }
         }
       }
@@ -901,12 +894,12 @@ getSummaryForRepair(repairId) {
     // 連動 repairParts：若該維修單用料仍停留在「已報價」且未產生訂單，則回復為「需求提出」並清除 quoteId
     try {
       const repairId = removed?.repairId || '';
-      if (repairId && _svc('RepairPartsService')?.getForRepair && _svc('RepairPartsService')?.update) {
-        const list = _svc('RepairPartsService').getForRepair(repairId);
+      if (repairId && window._svc('RepairPartsService')?.getForRepair && window._svc('RepairPartsService')?.update) {
+        const list = window._svc('RepairPartsService').getForRepair(repairId);
         for (const p of list) {
           if (!p || p.isDeleted) continue;
           if (p.quoteId === rid && !p.orderId && (p.status === '已報價' || !p.status)) {
-            await _svc('RepairPartsService').update(repairId, p.id, { status: '需求提出', quoteId: null });
+            await window._svc('RepairPartsService').update(repairId, p.id, { status: '需求提出', quoteId: null });
           }
         }
       }
@@ -998,7 +991,8 @@ getSummaryForRepair(repairId) {
 
 const quoteService = new QuoteService();
 if (typeof window !== 'undefined') {
-  window.QuoteService = quoteService;
+  // 舊版相容：保留 window.QuoteService
+
   try { window.AppRegistry?.register?.('QuoteService', quoteService); } catch (_) {}
 }
 

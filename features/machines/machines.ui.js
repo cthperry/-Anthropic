@@ -25,6 +25,8 @@ const escapeJsString = function(input){
     .replace(/\n/g, '\\n');
 };
 
+// Phase 1：統一 Service 存取走 window._svc（registry-first），避免直接 window.XxxService
+
 class MachinesUI {
   constructor() {
     this.query = '';
@@ -79,9 +81,8 @@ class MachinesUI {
   }
 
   getAllRepairsWithSerial() {
-    const all = ((window._svc ? window._svc('RepairService') : window.RepairService) && typeof (window._svc ? window._svc('RepairService') : window.RepairService).getAll === 'function')
-      ? (window._svc ? window._svc('RepairService') : window.RepairService).getAll()
-      : [];
+    const rs = window._svc('RepairService');
+    const all = (rs && typeof rs.getAll === 'function') ? rs.getAll() : [];
 
     return all
       .filter(r => !r?.isDeleted)
@@ -390,20 +391,19 @@ class MachinesUI {
   // Maintenance（機台保養）整合 - MNT-3
   // ================================
   _getMaintenanceService() {
-    try { return window._svc ? window._svc('MaintenanceService') : window.MaintenanceService; } catch (_) { return window.MaintenanceService; }
+    return window._svc('MaintenanceService');
   }
 
   async _ensureMaintenanceInit() {
-    const svc = this._getMaintenanceService();
-    if (!svc) return null;
+    // 深連結情境：避免直接 svc.init；走 ensureReady
     try {
-      if (!svc.isInitialized && typeof svc.init === 'function') {
-        await svc.init();
+      if (window.AppRegistry && typeof window.AppRegistry.ensureReady === 'function') {
+        await window.AppRegistry.ensureReady(['MaintenanceService'], { loadAll: false });
       }
     } catch (e) {
-      console.warn('MaintenanceService init failed:', e);
+      console.warn('MaintenanceService ensureReady failed:', e);
     }
-    return svc;
+    return this._getMaintenanceService();
   }
 
   _getLatestRepairForSerial(serial) {
@@ -461,17 +461,19 @@ class MachinesUI {
       `;
     }
 
-    // 尚未初始化：先顯示載入中
-    if (!svc.isInitialized && typeof svc.init === 'function') {
-      if (!svc.__machinesInitRequested) {
-        svc.__machinesInitRequested = true;
-        svc.init().then(() => {
-          try { delete svc.__machinesInitRequested; } catch (_) { svc.__machinesInitRequested = false; }
-          try { window.machinesUI?.renderDetail?.(); } catch (_) {}
-        }).catch(() => {
-          try { delete svc.__machinesInitRequested; } catch (_) { svc.__machinesInitRequested = false; }
-        });
-      }
+    // 尚未初始化：先顯示載入中（Phase 1：UI 不直接呼叫 svc.init；統一走 AppRegistry.ensureReady）
+    if (!svc.isInitialized) {
+      try {
+        if (!svc.__machinesReadyRequested && window.AppRegistry && typeof window.AppRegistry.ensureReady === 'function') {
+          svc.__machinesReadyRequested = true;
+          window.AppRegistry.ensureReady('MaintenanceService').then(() => {
+            try { delete svc.__machinesReadyRequested; } catch (_) { svc.__machinesReadyRequested = false; }
+            try { window.machinesUI?.renderDetail?.(); } catch (_) {}
+          }).catch(() => {
+            try { delete svc.__machinesReadyRequested; } catch (_) { svc.__machinesReadyRequested = false; }
+          });
+        }
+      } catch (_) {}
       return `
         <div class="summary-box">
           <div class="box-title">🛠️ 保養</div>
@@ -682,18 +684,18 @@ class MachinesUI {
   }
 
   async reload() {
-    // 若資料尚未載入，嘗試初始化相關 Service
-    if ((window._svc ? window._svc('RepairService') : window.RepairService) && !(window._svc ? window._svc('RepairService') : window.RepairService).isInitialized) {
-      await (window._svc ? window._svc('RepairService') : window.RepairService).init();
-    }
-    if ((window._svc ? window._svc('RepairPartsService') : window.RepairPartsService) && !(window._svc ? window._svc('RepairPartsService') : window.RepairPartsService).isInitialized) {
-      await (window._svc ? window._svc('RepairPartsService') : window.RepairPartsService).init();
-    }
-    if ((window._svc ? window._svc('QuoteService') : window.QuoteService) && !(window._svc ? window._svc('QuoteService') : window.QuoteService).isInitialized) {
-      await (window._svc ? window._svc('QuoteService') : window.QuoteService).init();
-    }
-    if ((window._svc ? window._svc('OrderService') : window.OrderService) && !(window._svc ? window._svc('OrderService') : window.OrderService).isInitialized) {
-      await (window._svc ? window._svc('OrderService') : window.OrderService).init();
+    // Phase 1：集中化初始化（registry-first）
+    try {
+      if (window.AppRegistry && typeof window.AppRegistry.ensureReady === 'function') {
+        await window.AppRegistry.ensureReady([
+          'RepairService',
+          'RepairPartsService',
+          'QuoteService',
+          'OrderService'
+        ], { loadAll: false });
+      }
+    } catch (e) {
+      console.warn('MachinesUI reload ensureReady failed:', e);
     }
 
     this.renderSerialList();

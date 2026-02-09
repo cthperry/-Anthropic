@@ -183,5 +183,8 @@
     }
   }
 
-  window.RepairTemplatesService = window.RepairTemplatesService || new RepairTemplatesService();
+  const reg = (typeof window !== 'undefined') ? window.AppRegistry : null;
+  let svc = (reg && typeof reg.get === 'function') ? reg.get('RepairTemplatesService') : null;
+  if (!svc) svc = new RepairTemplatesService();
+  try { reg?.register?.('RepairTemplatesService', svc); } catch (_) {}
 })();

@@ -38,9 +38,11 @@ class CustomerUI {
 
   _getService() {
     try {
-      return (typeof window._svc === 'function') ? window._svc('CustomerService') : window.CustomerService;
+      const reg = (typeof window !== 'undefined' && window.AppRegistry) ? window.AppRegistry : null;
+      if (reg && typeof reg.get === 'function') return reg.get('CustomerService');
+      return (typeof window !== 'undefined' && typeof window._svc === 'function') ? window._svc('CustomerService') : null;
     } catch (_) {
-      return window.CustomerService;
+      return (typeof window !== 'undefined' && typeof window._svc === 'function') ? window._svc('CustomerService') : null;
     }
   }
 
@@ -193,6 +195,31 @@ class CustomerUI {
     this.filters = { ...(this.filtersDraft) };
     this._saveFiltersState();
     this._updateFiltersToggleButton();
+
+    // 同步 UI 欄位（避免狀態已清，但輸入框仍顯示舊值）
+    try {
+      const searchEl = document.getElementById('customers-search');
+      if (searchEl) searchEl.value = this.searchDraft;
+
+      const vUpdatedFrom = (this.filtersDraft.updatedFrom || '');
+      const vUpdatedTo = (this.filtersDraft.updatedTo || '');
+      const vMinRepairCount = (this.filtersDraft.minRepairCount || '');
+
+      const inUpdatedFrom = document.querySelector('input[data-filter-key="updatedFrom"]');
+      const inUpdatedTo = document.querySelector('input[data-filter-key="updatedTo"]');
+      const inMinRepair = document.querySelector('input[data-filter-key="minRepairCount"]');
+      if (inUpdatedFrom) inUpdatedFrom.value = vUpdatedFrom;
+      if (inUpdatedTo) inUpdatedTo.value = vUpdatedTo;
+      if (inMinRepair) inMinRepair.value = vMinRepairCount;
+
+      const cbPhone = document.querySelector('input[data-filter-flag="hasPhone"]');
+      const cbEmail = document.querySelector('input[data-filter-flag="hasEmail"]');
+      if (cbPhone) cbPhone.checked = !!this.filtersDraft.hasPhone;
+      if (cbEmail) cbEmail.checked = !!this.filtersDraft.hasEmail;
+    } catch (e) {
+      console.warn('ClearAll DOM sync failed:', e);
+    }
+
     this.scheduleUpdateList();
   }
 
@@ -307,13 +334,13 @@ class CustomerUI {
 
           <div class="module-toolbar-right">
             <div class="customers-search">
-              <input id="customers-search" class="input" type="text" placeholder="搜尋公司/聯絡人/電話/Email" value="${this._escapeAttr(this.searchDraft)}" oninput="CustomerUI.onSearchDraft(event)" onkeydown="CustomerUI.onSearchKeydown(event)" />
+              <input id="customers-search" class="input" type="text" placeholder="搜尋公司/聯絡人/電話/Email" value="${this._escapeAttr(this.searchDraft)}" />
             </div>
-            <button class="btn primary" onclick="CustomerUI.applyFilters()">搜尋</button>
-            <button class="btn" onclick="CustomerUI.clearAll()">清除</button>
-            <button class="btn" id="customers-toggle-filters-btn" onclick="CustomerUI.toggleFilters()">${this._escapeAttr(filtersBtnText)}</button>
-            <button class="btn" onclick="CustomerUI.openRenameCompany()">📝 公司更名同步</button>
-            <button class="btn primary" onclick="CustomerUI.openForm()">➕ 新增聯絡人</button>
+            <button class="btn primary" data-action="applyFilters">搜尋</button>
+            <button class="btn" data-action="clearAll">清除</button>
+            <button class="btn" id="customers-toggle-filters-btn" data-action="toggleFilters">${this._escapeAttr(filtersBtnText)}</button>
+            <button class="btn" data-action="openRenameCompany">📝 公司更名同步</button>
+            <button class="btn primary" data-action="openForm">➕ 新增聯絡人</button>
           </div>
         </div>
 
@@ -323,31 +350,31 @@ class CustomerUI {
               <div class="panel-title"><strong>篩選</strong><span class="muted" style="margin-left:10px;">可多條件組合</span></div>
             </div>
             <div class="panel-right">
-              <button class="btn primary" onclick="CustomerUI.applyFilters()">搜尋</button>
-              <button class="btn" onclick="CustomerUI.clearAll()">清除</button>
+              <button class="btn primary" data-action="applyFilters">搜尋</button>
+              <button class="btn" data-action="clearAll">清除</button>
             </div>
           </div>
 
           <div class="customers-filters-grid">
             <div class="field">
               <label class="form-label">更新日期（起）</label>
-              <input class="input" type="date" value="${this._escapeAttr((this.filtersDraft?.updatedFrom || ''))}" onchange="CustomerUI.onFilterDraftChange(event, 'updatedFrom')" />
+              <input class="input" type="date" value="${this._escapeAttr((this.filtersDraft?.updatedFrom || ''))}" data-filter-key="updatedFrom" />
             </div>
             <div class="field">
               <label class="form-label">更新日期（迄）</label>
-              <input class="input" type="date" value="${this._escapeAttr((this.filtersDraft?.updatedTo || ''))}" onchange="CustomerUI.onFilterDraftChange(event, 'updatedTo')" />
+              <input class="input" type="date" value="${this._escapeAttr((this.filtersDraft?.updatedTo || ''))}" data-filter-key="updatedTo" />
             </div>
             <div class="field">
               <label class="form-label">最少維修數</label>
-              <input class="input" type="number" min="0" step="1" placeholder="例如 1" value="${this._escapeAttr((this.filtersDraft?.minRepairCount || ''))}" oninput="CustomerUI.onFilterDraftChange(event, 'minRepairCount')" />
+              <input class="input" type="number" min="0" step="1" placeholder="例如 1" value="${this._escapeAttr((this.filtersDraft?.minRepairCount || ''))}" data-filter-key="minRepairCount" />
             </div>
             <div class="customers-filters-flags">
               <label class="form-checkbox">
-                <input type="checkbox" ${this.filtersDraft?.hasPhone ? 'checked' : ''} onchange="CustomerUI.onFilterDraftToggle(event, 'hasPhone')" />
+                <input type="checkbox" ${this.filtersDraft?.hasPhone ? 'checked' : ''} data-filter-flag="hasPhone" />
                 有電話
               </label>
               <label class="form-checkbox">
-                <input type="checkbox" ${this.filtersDraft?.hasEmail ? 'checked' : ''} onchange="CustomerUI.onFilterDraftToggle(event, 'hasEmail')" />
+                <input type="checkbox" ${this.filtersDraft?.hasEmail ? 'checked' : ''} data-filter-flag="hasEmail" />
                 有 Email
               </label>
             </div>
@@ -359,12 +386,135 @@ class CustomerUI {
       </div>
 
       <div id="customer-modal" class="modal" style="display:none;">
-        <div class="modal-backdrop" onclick="CustomerUI.closeModal()"></div>
+        <div class="modal-backdrop" data-action="closeModal"></div>
         <div class="modal-content" id="customer-modal-content"></div>
       </div>
     `;
 
+    this._bindDomHandlers(container);
     this.updateList();
+  }
+
+  _bindDomHandlers(container) {
+    if (!container || this._domBound) return;
+    this._domBound = true;
+
+    // Click delegation (toolbar + list + modal)
+    container.addEventListener('click', (e) => {
+      try {
+        const t = e.target;
+        if (!t) return;
+
+        // Do not hijack tel/mail links (allow default)
+        const a = t.closest && t.closest('a');
+        if (a) {
+          const href = (a.getAttribute('href') || '').toLowerCase();
+          if (href.startsWith('tel:') || href.startsWith('mailto:')) return;
+        }
+
+        const actEl = t.closest && t.closest('[data-action]');
+        if (!actEl) return;
+
+        const action = (actEl.getAttribute('data-action') || '').toString();
+        const id = (actEl.getAttribute('data-id') || '').toString();
+        const company = (actEl.getAttribute('data-company') || '').toString();
+
+        // Optional: stopPropagation marker
+        if (actEl.getAttribute('data-stop') === '1') {
+          e.stopPropagation();
+        }
+
+        switch (action) {
+          case 'applyFilters':
+            this.applyFilters();
+            return;
+          case 'clearAll':
+            this.clearAll();
+            return;
+          case 'toggleFilters':
+            this.toggleFiltersPanel();
+            return;
+          case 'openRenameCompany':
+            this.openRenameCompany();
+            return;
+          case 'openForm':
+            this.openForm(id, company);
+            return;
+          case 'toggleCompany':
+            this.toggleCompany(company);
+            return;
+          case 'openDetail':
+            this.openDetail(id);
+            return;
+          case 'closeModal':
+            this.closeModal();
+            return;
+          case 'confirmDelete':
+            if (window.CustomerUIForms && typeof window.CustomerUIForms.confirmDelete === 'function') {
+              window.CustomerUIForms.confirmDelete(id);
+            }
+            return;
+          default:
+            return;
+        }
+      } catch (err) {
+        console.warn('customers delegated click failed:', err);
+      }
+    }, { passive: true });
+
+    // Search input draft + keyboard
+    container.addEventListener('input', (e) => {
+      const t = e.target;
+      if (!t) return;
+      if (t.id === 'customers-search') {
+        this.searchDraft = t.value || '';
+        return;
+      }
+      const k = t.getAttribute && t.getAttribute('data-filter-key');
+      if (k) this.setFilterDraft(k, t.value);
+    });
+
+    container.addEventListener('change', (e) => {
+      const t = e.target;
+      if (!t) return;
+      const k = t.getAttribute && t.getAttribute('data-filter-key');
+      if (k) {
+        this.setFilterDraft(k, t.value);
+        return;
+      }
+      const f = t.getAttribute && t.getAttribute('data-filter-flag');
+      if (f) {
+        this.setFilterDraft(f, !!t.checked);
+      }
+    });
+
+    container.addEventListener('keydown', (e) => {
+      const t = e.target;
+      if (!t) return;
+      if (t.id !== 'customers-search') return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.applyFilters();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.clearAll();
+      }
+    });
+
+    // Submit delegation for modal forms
+    container.addEventListener('submit', (e) => {
+      const form = e.target;
+      if (!form || !form.id) return;
+      if (form.id === 'customer-form') {
+        if (window.CustomerUIForms && typeof window.CustomerUIForms.handleSubmit === 'function') {
+          window.CustomerUIForms.handleSubmit(e);
+        }
+      } else if (form.id === 'company-rename-form') {
+        if (window.CustomerUI && typeof window.CustomerUI.handleRenameCompany === 'function') {
+          window.CustomerUI.handleRenameCompany(e);
+        }
+      }
+    });
   }
 
   renderLoadingCards(count = 6) {
@@ -483,12 +633,12 @@ class CustomerUI {
     const topContact = contacts.length > 0 ? contacts[0] : null;
     const topContactHtml = topContact ? (() => {
       const contactName = (topContact.contact || '').trim() || '<span class="muted">(未填聯絡人)</span>';
-      const phone = topContact.phone ? `<a href="tel:${topContact.phone}" onclick="event.stopPropagation();">${topContact.phone}</a>` : '<span class="muted">無</span>';
-      const email = topContact.email ? `<a href="mailto:${topContact.email}" onclick="event.stopPropagation();">${topContact.email}</a>` : '<span class="muted">無</span>';
+      const phone = topContact.phone ? `<a href="tel:${topContact.phone}">${topContact.phone}</a>` : '<span class="muted">無</span>';
+      const email = topContact.email ? `<a href="mailto:${topContact.email}">${topContact.email}</a>` : '<span class="muted">無</span>';
       const rc = (typeof topContact.repairCount === 'number') ? topContact.repairCount : Number(topContact.repairCount) || 0;
 
       return `
-        <div class="contact-row contact-preview" onclick="CustomerUI.openDetail('${topContact.id}')">
+        <div class=\"contact-row contact-preview\" data-action=\"openDetail\" data-id=\"${topContact.id}\">
           <div class="contact-main">
             <div class="contact-name">${contactName}</div>
             <div class="contact-meta">電話：${phone}　｜　Email：${email}</div>
@@ -504,12 +654,12 @@ class CustomerUI {
 
     const contactsHtml = contacts.map(c => {
       const contactName = (c.contact || '').trim() || '<span class="muted">(未填聯絡人)</span>';
-      const phone = c.phone ? `<a href="tel:${c.phone}" onclick="event.stopPropagation();">${c.phone}</a>` : '<span class="muted">無</span>';
-      const email = c.email ? `<a href="mailto:${c.email}" onclick="event.stopPropagation();">${c.email}</a>` : '<span class="muted">無</span>';
+      const phone = c.phone ? `<a href="tel:${c.phone}">${c.phone}</a>` : '<span class="muted">無</span>';
+      const email = c.email ? `<a href="mailto:${c.email}">${c.email}</a>` : '<span class="muted">無</span>';
       const rc = (typeof c.repairCount === 'number') ? c.repairCount : Number(c.repairCount) || 0;
 
       return `
-        <div class="contact-row" onclick="CustomerUI.openDetail('${c.id}')">
+        <div class=\"contact-row\" data-action=\"openDetail\" data-id=\"${c.id}\">
           <div class="contact-main">
             <div class="contact-name">${contactName}</div>
             <div class="contact-meta">電話：${phone}　｜　Email：${email}</div>
@@ -523,14 +673,14 @@ class CustomerUI {
 
     return `
       <div class="company-card card accent-left ${collapsed ? 'is-collapsed' : ''}" data-company-key="${companyKey}">
-        <div class="company-header" onclick="CustomerUI.toggleCompany('${companyJs}')" aria-expanded="${collapsed ? 'false' : 'true'}">
+        <div class="company-header" data-action="toggleCompany" data-company="${this._escapeAttr(company)}" aria-expanded="${collapsed ? 'false' : 'true'}">
           <div>
             <div class="company-name">${company}</div>
             <div class="company-sub">聯絡人：${contactCount}　｜　累計維修：${group.totalRepairCount || 0}</div>
           </div>
           <div class="company-actions">
-            <button class="btn ghost company-toggle" title="展開/縮合" onclick="event.stopPropagation(); CustomerUI.toggleCompany('${companyJs}')">${collapsed ? '▸' : '▾'}</button>
-            <button class="btn" onclick="event.stopPropagation(); CustomerUI.openForm('', '${companyJs}')">➕ 新增聯絡人</button>
+            <button class=\"btn ghost company-toggle\" title=\"展開/縮合\" data-action=\"toggleCompany\" data-company=\"${this._escapeAttr(company)}\" data-stop=\"1\">${collapsed ? '▸' : '▾'}</button>
+            <button class=\"btn\" data-action=\"openForm\" data-company=\"${this._escapeAttr(company)}\" data-stop=\"1\">➕ 新增聯絡人</button>
           </div>
         </div>
         <div class="company-preview">${topContactHtml}</div>
@@ -640,10 +790,10 @@ class CustomerUI {
       <div class="modal-dialog">
         <div class="modal-header">
           <h3>公司更名同步</h3>
-          <button class="modal-close" onclick="CustomerUI.closeModal()">✕</button>
+          <button class="modal-close" data-action="closeModal">✕</button>
         </div>
 
-        <form id="company-rename-form" class="modal-body" onsubmit="CustomerUI.handleRenameCompany(event)">
+        <form id="company-rename-form" class="modal-body">
           <div class="form-section">
             <h4 class="form-section-title">更名設定</h4>
             <div class="form-grid">
@@ -665,7 +815,7 @@ class CustomerUI {
         </form>
 
         <div class="modal-footer">
-          <button class="btn" onclick="CustomerUI.closeModal()">取消</button>
+          <button class="btn" data-action="closeModal">取消</button>
           <button type="submit" form="company-rename-form" class="btn primary">執行更名</button>
         </div>
       </div>

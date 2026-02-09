@@ -11,7 +11,8 @@ function _svc(name) {
     if (typeof window !== 'undefined') {
       if (window.getService && typeof window.getService === 'function') return window.getService(name);
       if (window.AppRegistry && typeof window.AppRegistry.get === 'function') return window.AppRegistry.get(name);
-      return window[name];
+      if (typeof window._svc === 'function') return window._svc(name);
+      return null;
     }
   } catch (_) {}
   return null;
@@ -358,7 +359,7 @@ class KBService {
 
 const kbService = new KBService();
 if (typeof window !== 'undefined') {
-  window.KBService = kbService;
+
   try { window.AppRegistry?.register?.('KBService', kbService); } catch (_) {}
 }
 

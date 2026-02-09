@@ -5,6 +5,9 @@
  * 擴充 RepairUI 類別，新增表單和詳情渲染功能
  */
 
+
+// Phase 1：registry-first 取得 Service（避免直接 window.XxxService）
+// 注意：本專案為非 module script（同一 global scope），避免宣告可重複載入時會衝突的 top-level const。
 // 擴充 RepairUI 原型
 Object.assign(RepairUI.prototype, {
   /**
@@ -37,10 +40,10 @@ Object.assign(RepairUI.prototype, {
     const escapeAttr = (input) => escapeHtml(input).split('\\n').join(' ').split('\\r').join(' ');
 
     // 公司清單（以 customers.name 去重）
-    const companies = (window.CustomerService && typeof window.CustomerService.getCompanies === 'function')
-      ? window.CustomerService.getCompanies()
-      : (window.CustomerService && typeof window.CustomerService.getAll === 'function'
-          ? Array.from(new Set(window.CustomerService.getAll().map(c => (c.name || '').toString().trim()).filter(Boolean)))
+    const companies = (window._svc('CustomerService') && typeof window._svc('CustomerService').getCompanies === 'function')
+      ? window._svc('CustomerService').getCompanies()
+      : (window._svc('CustomerService') && typeof window._svc('CustomerService').getAll === 'function'
+          ? Array.from(new Set(window._svc('CustomerService').getAll().map(c => (c.name || '').toString().trim()).filter(Boolean)))
           : []);
     const companyOptions = (companies || []).map(name => {
       const safe = escapeAttr(name || '');
@@ -49,8 +52,8 @@ Object.assign(RepairUI.prototype, {
 
     // 聯絡人清單（依公司動態）
     const companyName = (repair.customer || '').toString().trim();
-    const contacts = (window.CustomerService && typeof window.CustomerService.getContactsByCompanyName === 'function' && companyName)
-      ? window.CustomerService.getContactsByCompanyName(companyName)
+    const contacts = (window._svc('CustomerService') && typeof window._svc('CustomerService').getContactsByCompanyName === 'function' && companyName)
+      ? window._svc('CustomerService').getContactsByCompanyName(companyName)
       : [];
     const contactOptions = Array.from(new Set((contacts || []).map(c => (c.contact || '').toString().trim()).filter(Boolean)))
       .map(n => {
@@ -128,10 +131,10 @@ Object.assign(RepairUI.prototype, {
       <div class="modal-dialog">
         <div class="modal-header">
           <h3>${isEdit ? '編輯維修單' : '新增維修單'}</h3>
-          <button class="modal-close" onclick="RepairUI.closeModal()">✕</button>
+          <button class="modal-close" type="button" data-action="repairs.closeModal">✕</button>
         </div>
         
-        <form id="repair-form" class="modal-body" onsubmit="RepairUI.handleSubmit(event)">
+        <form id="repair-form" class="modal-body" data-action="repairs.handleSubmit">
           
           
           <!-- 狀態與優先級 -->
@@ -151,7 +154,7 @@ Object.assign(RepairUI.prototype, {
 
               <div class="form-group">
                 <label class="form-label">狀態</label>
-                <select name="status" class="input" onchange="RepairUI.handleStatusChange(event)">
+                <select name="status" class="input" data-action="repairs.handleStatusChange">
                   ${statuses.map(s => `
                     <option value="${s.value}" ${repair.status === s.value ? 'selected' : ''}>
                       ${s.label}
@@ -170,7 +173,7 @@ Object.assign(RepairUI.prototype, {
                   max="100"
                   step="10"
                   value="${repair.progress || 0}"
-                  oninput="RepairUI.handleProgressChange(event)"
+                  data-action="repairs.handleProgressChange"
                 />
               </div>
               
@@ -198,7 +201,7 @@ Object.assign(RepairUI.prototype, {
                 <select class="input" id="repair-template-select">
                   <option value="">（不使用模板）</option>
                 </select>
-                <button class="btn" type="button" id="btn-template-manage" onclick="RepairUI.templateManage && RepairUI.templateManage()">管理模板</button>
+                <button class="btn" type="button" id="btn-template-manage" data-action="repairs.templateManage">管理模板</button>
               </div>
             </div>
 
@@ -230,10 +233,10 @@ Object.assign(RepairUI.prototype, {
                     class="input"
                     value="${escapeAttr(repair.customer || '')}"
                     placeholder="請輸入公司名稱"
-                    list="company-list" oninput="RepairUI.handleCustomerPick(event)" autocomplete="off"
+                    list="company-list" data-action="repairs.handleCustomerPick" autocomplete="off"
                     required
                   />
-                  <button type="button" class="input-dropdown-btn" data-dd="company" onclick="RepairUI.toggleCompanyDropdown(event)" aria-label="選擇公司" title="選擇公司">▾</button>
+                  <button type="button" class="input-dropdown-btn" data-dd="company" data-action="repairs.toggleCompanyDropdown" aria-label="選擇公司" title="選擇公司">▾</button>
                 </div>
                 <datalist id="company-list">${companyOptions}</datalist>
               </div>
@@ -247,9 +250,9 @@ Object.assign(RepairUI.prototype, {
                     class="input"
                     value="${escapeAttr(repair.contact || '')}"
                     placeholder="請輸入聯絡人"
-                    list="contact-list" oninput="RepairUI.handleContactPick(event)" autocomplete="off"
+                    list="contact-list" data-action="repairs.handleContactPick" autocomplete="off"
                   />
-                  <button type="button" class="input-dropdown-btn" data-dd="contact" onclick="RepairUI.toggleContactDropdown(event)" aria-label="選擇聯絡人" title="選擇聯絡人">▾</button>
+                  <button type="button" class="input-dropdown-btn" data-dd="contact" data-action="repairs.toggleContactDropdown" aria-label="選擇聯絡人" title="選擇聯絡人">▾</button>
                 </div>
                 <datalist id="contact-list">${contactOptions}</datalist>
               </div>
@@ -285,7 +288,7 @@ Object.assign(RepairUI.prototype, {
             <div class="form-grid three">
               <div class="form-group">
                 <label class="form-label">產品線</label>
-                <select name="productLine" id="product-line" class="input" onchange="RepairUI.handleProductLineChange(event)">
+                <select name="productLine" id="product-line" class="input" data-action="repairs.handleProductLineChange">
                   <option value="" ${!initialProductLine ? 'selected' : ''}>（不指定）</option>
                   ${productLineOptions}
                 </select>
@@ -293,7 +296,7 @@ Object.assign(RepairUI.prototype, {
               </div>
 
               <div class="form-group">
-                <label class="form-label required machine-label"><span>設備名稱</span><button type="button" class="btn ghost sm machine-filter-btn" style="visibility:hidden;pointer-events:none;" onclick="RepairUI.toggleMachineFilter(event)">篩選</button></label>
+                <label class="form-label required machine-label"><span>設備名稱</span><button type="button" class="btn ghost sm machine-filter-btn" style="visibility:hidden;pointer-events:none;" data-action="repairs.toggleMachineFilter">篩選</button></label>
 <!-- 最終寫回的欄位（保持既有資料結構：machine） -->
 <input type="hidden" name="machine" id="machine-final" value="${escapeAttr(currentMachine)}" />
 
@@ -306,7 +309,7 @@ Object.assign(RepairUI.prototype, {
     class="input"
     value=""
     placeholder="搜尋機型（輸入即可篩選）"
-    oninput="RepairUI.handleMachineSearchInput(event)"
+    data-action="repairs.handleMachineSearchInput"
     autocomplete="off"
   />
 </div>
@@ -317,7 +320,7 @@ Object.assign(RepairUI.prototype, {
                   id="machine-select"
                   class="input"
                   style="${useSelectInitially ? '' : 'display:none;'}"
-                  onchange="RepairUI.handleMachineSelectChange(event)"
+                  data-action="repairs.handleMachineSelectChange"
                 >
                   ${machineSelectOptions}
                 </select>
@@ -331,7 +334,7 @@ Object.assign(RepairUI.prototype, {
                   value="${escapeAttr(machineManualValue)}"
                   placeholder="請輸入設備名稱"
                   style="${showManualInitially ? '' : 'display:none;'}"
-                  oninput="RepairUI.handleMachineManualInput(event)"
+                  data-action="repairs.handleMachineManualInput"
                   autocomplete="off"
                 />
 
@@ -392,7 +395,7 @@ Object.assign(RepairUI.prototype, {
                     type="checkbox"
                     name="needParts"
                     ${repair.needParts ? 'checked' : ''}
-                  onchange="RepairUI.handleNeedPartsChange(event)"
+                  data-action="repairs.handleNeedPartsChange"
                   />
                   <span>需要零件</span>
                 </label>
@@ -451,7 +454,7 @@ Object.assign(RepairUI.prototype, {
         </form>
         
         <div class="modal-footer">
-          <button type="button" class="btn" onclick="RepairUI.closeModal()">
+          <button type="button" class="btn" data-action="repairs.closeModal">
             取消
           </button>
           <button type="submit" form="repair-form" class="btn primary">
@@ -470,7 +473,7 @@ Object.assign(RepairUI.prototype, {
     if (!repair) return '';
     
     const display = window.RepairModel.toDisplay(repair);
-    const history = window.RepairService.getHistory(repair.id);
+    const history = window._svc('RepairService').getHistory(repair.id);
     const historyCount = Array.isArray(history) ? history.length : 0;
     const historyTabLabel = historyCount ? `變更記錄 (${historyCount})` : '變更記錄';
     
@@ -530,20 +533,20 @@ Object.assign(RepairUI.prototype, {
       <div class="modal-dialog modal-wide">
         <div class="modal-header">
           <div class="detail-header-left">
-            <button class="btn" onclick="RepairUI.closeModal()">← 返回</button>
+            <button class="btn" type="button" data-action="repairs.closeModal">← 返回</button>
             <div>
               <h3>${safeId}</h3>
             <span class="muted">📅 維修日期：${safeCreatedDate || display.createdAtFormatted.slice(0, 10)}</span>
           </div>
           </div>
-          <button class="modal-close" onclick="RepairUI.closeModal()">✕</button>
+          <button class="modal-close" type="button" data-action="repairs.closeModal">✕</button>
         </div>
         
         <div class="modal-body">
           <!-- 標籤（P3：變更記錄） -->
           <div class="detail-tabbar chip-row" role="tablist" aria-label="維修詳情標籤">
-            <button type="button" class="chip active" id="repair-detail-tab-btn-main" onclick="RepairUI.switchDetailTab('main')">總覽</button>
-            <button type="button" class="chip" id="repair-detail-tab-btn-history" onclick="RepairUI.switchDetailTab('history')">${historyTabLabel}</button>
+            <button type="button" class="chip active" id="repair-detail-tab-btn-main" data-action="repairs.switchDetailTab" data-value="main">總覽</button>
+            <button type="button" class="chip" id="repair-detail-tab-btn-history" data-action="repairs.switchDetailTab" data-value="history">${historyTabLabel}</button>
           </div>
 
           <div id="repair-detail-tab-main">
@@ -560,13 +563,13 @@ Object.assign(RepairUI.prototype, {
             </div>
             
             <div class="detail-buttons">
-              <button class="btn" onclick="RepairUI.openForm('${repair.id}')">
+              <button class="btn" data-action="repairs.openForm" data-id="${repair.id}">
                 ✏️ 編輯
               </button>
-              <button class="btn" type="button" onclick="RepairUI.duplicateRepair('${repair.id}')" title="複製成新維修單">
+              <button class="btn" type="button" data-action="repairs.duplicateRepair" data-id="${repair.id}" title="複製成新維修單">
                 📄 複製
               </button>
-              <button class="btn danger" onclick="RepairUI.confirmDelete('${repair.id}')">
+              <button class="btn danger" data-action="repairs.confirmDelete" data-id="${repair.id}">
                 🗑️ 刪除
               </button>
             </div>
@@ -639,10 +642,10 @@ Object.assign(RepairUI.prototype, {
             <div class="detail-body">
               <div class="mini-summary" id="maintenance-summary" data-repair-id="${repair.id}">載入中...</div>
               <div class="chip-row" style="margin-top:10px;justify-content:flex-end;flex-wrap:wrap;" id="maintenance-actions" data-repair-id="${repair.id}">
-                <button class="chip" type="button" onclick="RepairUI.openMaintenanceFromRepair('${repair.id}')">開啟保養</button>
-                <button class="chip" type="button" onclick="RepairUI.createMaintenanceEquipmentFromRepair('${repair.id}')">建立設備</button>
-                <button class="chip" type="button" onclick="RepairUI.addMaintenanceRecordFromRepair('${repair.id}')">＋建紀錄</button>
-                <button class="chip" type="button" onclick="RepairUI.closeAndWriteMaintenance('${repair.id}')">✅ 結案並寫入保養</button>
+                <button class="chip" type="button" data-action="repairs.openMaintenanceFromRepair" data-id="${repair.id}">開啟保養</button>
+                <button class="chip" type="button" data-action="repairs.createMaintenanceEquipmentFromRepair" data-id="${repair.id}">建立設備</button>
+                <button class="chip" type="button" data-action="repairs.addMaintenanceRecordFromRepair" data-id="${repair.id}">＋建紀錄</button>
+                <button class="chip" type="button" data-action="repairs.closeAndWriteMaintenance" data-id="${repair.id}">✅ 結案並寫入保養</button>
               </div>
             </div>
           </section>
@@ -657,6 +660,14 @@ Object.assign(RepairUI.prototype, {
               ` : ''}
             </div>
           </div>
+
+          <!-- 📝 工作記錄（WorkLog） -->
+          ${window.WorkLogUI ? window.WorkLogUI.renderSection(repair.id) : `
+            <section class="detail-block worklog-section" id="repair-worklog-section">
+              <div class="detail-title">📝 工作記錄</div>
+              <div class="detail-body"><div class="muted">載入中...</div></div>
+            </section>
+          `}
           
           <!-- 其他資訊 -->
           <div class="detail-section">
@@ -730,8 +741,8 @@ Object.assign(RepairUI.prototype, {
                 <div class="muted">載入中...</div>
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-                <button class="btn" onclick="RepairUI.openRepairParts('${repair.id}')">管理零件</button>
-                <button class="btn" onclick="RepairUI.openRepairParts('${repair.id}', { quickAdd: true })">+ 新增用料</button>
+                <button class="btn" data-action="repairs.openRepairParts" data-id="${repair.id}">管理零件</button>
+                <button class="btn" data-action="repairs.openRepairParts" data-id="${repair.id}" data-quick-add="1">+ 新增用料</button>
               </div>
             </div>
           </div>
@@ -998,13 +1009,13 @@ Object.assign(RepairUI.prototype, {
       // 維修日期（YYYY-MM-DD）
       if (typeof data.createdDate === 'string') data.createdDate = data.createdDate.trim();
 
-      if (!window.RepairService) throw new Error('RepairService not found');
+      if (!window._svc('RepairService')) throw new Error('RepairService not found');
 
       // 狀態/進度規則由 Model 統一正規化（create/update 內會處理）
       if (id) {
-        await window.RepairService.update(id, data);
+        await window._svc('RepairService').update(id, data);
       } else {
-        await window.RepairService.create(data);
+        await window._svc('RepairService').create(data);
       }
 
       // 注意：V161.133 起不再把「產品線/設備/優先級」寫入 localStorage 作為下一次新增預設

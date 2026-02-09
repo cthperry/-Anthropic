@@ -540,13 +540,23 @@ this.customersRef.on('child_changed', (snapshot) => {
     // 2) 其他模組：維修單 / 報價 / 訂單
     const result = { customers: customersCount, repairs: 0, quotes: 0, orders: 0 };
 
+    // 2) 其他模組：維修單 / 報價 / 訂單（Phase 1：registry-first；避免直接 window.*Service）
+    const reg = (typeof window !== 'undefined' && window.AppRegistry) ? window.AppRegistry : null;
+
+    // Phase 1：集中化確保服務 ready（避免各處手動 init/loadAll）
     try {
-      // 確保服務已初始化（避免使用者尚未進入該模組時，快取尚未載入導致同步數量為 0）
-      if (window.RepairService && typeof window.RepairService.init === 'function') {
-        try { await window.RepairService.init(); } catch (_) {}
+      if (reg && typeof reg.ensureReady === 'function') {
+        await reg.ensureReady(['RepairService', 'QuoteService', 'OrderService']);
       }
-      if (window.RepairService && typeof window.RepairService.renameCompany === 'function') {
-        const r = await window.RepairService.renameCompany(fromName, newName);
+    } catch (_) {}
+
+    try {
+      const RepairService = (reg && typeof reg.get === 'function')
+        ? reg.get('RepairService')
+        : (typeof window._svc === 'function' ? window._svc('RepairService') : null);
+
+      if (RepairService && typeof RepairService.renameCompany === 'function') {
+        const r = await RepairService.renameCompany(fromName, newName);
         result.repairs = Number(r?.updated || r?.count || 0) || 0;
       }
     } catch (e) {
@@ -554,11 +564,12 @@ this.customersRef.on('child_changed', (snapshot) => {
     }
 
     try {
-      if (window.QuoteService && typeof window.QuoteService.init === 'function') {
-        try { await window.QuoteService.init(); } catch (_) {}
-      }
-      if (window.QuoteService && typeof window.QuoteService.renameCustomer === 'function') {
-        const q = await window.QuoteService.renameCustomer(fromName, newName);
+      const QuoteService = (reg && typeof reg.get === 'function')
+        ? reg.get('QuoteService')
+        : (typeof window._svc === 'function' ? window._svc('QuoteService') : null);
+
+      if (QuoteService && typeof QuoteService.renameCustomer === 'function') {
+        const q = await QuoteService.renameCustomer(fromName, newName);
         result.quotes = Number(q?.updated || q?.count || 0) || 0;
       }
     } catch (e) {
@@ -566,11 +577,12 @@ this.customersRef.on('child_changed', (snapshot) => {
     }
 
     try {
-      if (window.OrderService && typeof window.OrderService.init === 'function') {
-        try { await window.OrderService.init(); } catch (_) {}
-      }
-      if (window.OrderService && typeof window.OrderService.renameCustomer === 'function') {
-        const o = await window.OrderService.renameCustomer(fromName, newName);
+      const OrderService = (reg && typeof reg.get === 'function')
+        ? reg.get('OrderService')
+        : (typeof window._svc === 'function' ? window._svc('OrderService') : null);
+
+      if (OrderService && typeof OrderService.renameCustomer === 'function') {
+        const o = await OrderService.renameCustomer(fromName, newName);
         result.orders = Number(o?.updated || o?.count || 0) || 0;
       }
     } catch (e) {
@@ -692,7 +704,7 @@ this.customersRef.on('child_changed', (snapshot) => {
 // 全域實例
 const customerService = new CustomerService();
 if (typeof window !== 'undefined') {
-  window.CustomerService = customerService;
+
   try { window.AppRegistry?.register?.('CustomerService', customerService); } catch (_) {}
 }
 

@@ -652,7 +652,7 @@
   }
 
   const maintenanceService = new MaintenanceService();
-  window.MaintenanceService = maintenanceService;
+
   try { window.AppRegistry?.register?.('MaintenanceService', maintenanceService); } catch (_) {}
   try { console.log('✅ MaintenanceService loaded'); } catch (_) {}
 })();

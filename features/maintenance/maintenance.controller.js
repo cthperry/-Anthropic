@@ -11,7 +11,12 @@
 
     async init(){
       if (this._inited) return;
-      try { await window.MaintenanceService?.init?.(); } catch (e) { console.warn('MaintenanceService init failed:', e); }
+      try {
+        const reg = window.AppRegistry;
+        if (reg && typeof reg.ensureReady === 'function') {
+          await reg.ensureReady(['MaintenanceService'], { loadAll: false });
+        }
+      } catch (e) { console.warn('MaintenanceService init failed:', e); }
       this._inited = true;
     }
 

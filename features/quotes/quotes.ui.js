@@ -3,6 +3,8 @@
  * V161 - Quotes Module - UI Layer
  */
 
+// Phase 1：統一 Service 存取走 window._svc（registry-first），避免直接 window.XxxService
+
 class QuotesUI {
   constructor() {
     this.searchText = '';
@@ -205,16 +207,20 @@ class QuotesUI {
   }
   async update() {
     try {
-      if (window.QuoteService && !window.QuoteService.isInitialized) await window.QuoteService.init();
-      if (window.RepairPartsService && !window.RepairPartsService.isInitialized) await window.RepairPartsService.init();
+      if (window.AppRegistry && typeof window.AppRegistry.ensureReady === 'function') {
+        await window.AppRegistry.ensureReady(['QuoteService', 'RepairPartsService'], { loadAll: false });
+      } else {
+        if (window._svc('QuoteService') && !window._svc('QuoteService').isInitialized) await window._svc('QuoteService').init();
+        if (window._svc('RepairPartsService') && !window._svc('RepairPartsService').isInitialized) await window._svc('RepairPartsService').init();
+      }
     } catch (e) {
-      console.warn('QuotesUI init service failed:', e);
+      console.warn('QuotesUI ensureReady failed:', e);
     }
 
     // 確保草稿存在（避免第一次 render input 空白）
     try { this._syncDraftFromApplied(); } catch (_) {}
 
-    const baseRows = window.QuoteService ? window.QuoteService.search(this.searchText) : [];
+    const baseRows = window._svc('QuoteService') ? window._svc('QuoteService').search(this.searchText) : [];
     const subtitle = document.getElementById('quotes-subtitle');
     if (subtitle) subtitle.textContent = `共 ${baseRows.length} 筆`;
 
@@ -438,7 +444,7 @@ class QuotesUI {
   renderQuoteCard(q) {
     // 注意：卡片 render 時仍可能在資料同步/空值狀態，需避免未宣告變數造成全站 fatal
     const idSafe = this._escapeAttr(q.id);
-    const repair = window.RepairService?.get?.(q.repairId) || null;
+    const repair = window._svc('RepairService')?.get?.(q.repairId) || null;
     const repairNo = repair ? (repair.repairNo || repair.id || '') : (q.repairId ? q.repairId : '');
     // customer：以維修單的公司名稱為優先（客戶更名後卡片/搜尋可反映新名稱）
     const customerDisplay = (repair?.customer || q.customer || '').toString().trim();
@@ -595,7 +601,7 @@ class QuotesUI {
     const form = document.getElementById(`quote-detail-form-${id}`);
     if (!form) return (this._draftItems && this._draftItems[id]) ? this._draftItems[id] : [];
 
-    const q = window.QuoteService?.get?.(id);
+    const q = window._svc('QuoteService')?.get?.(id);
     const baseItems = q?.items || [];
     this._setActiveQuote(id, baseItems);
     const list = this._ensureDraftItems(id, baseItems);
@@ -633,7 +639,7 @@ class QuotesUI {
     const idx = Number(index);
     if (!id || !Number.isFinite(idx) || idx < 0) return;
 
-    const q = window.QuoteService?.get?.(id);
+    const q = window._svc('QuoteService')?.get?.(id);
     const baseItems = q?.items || [];
     this._setActiveQuote(id, baseItems);
     const list = this._ensureDraftItems(id, baseItems);
@@ -658,7 +664,7 @@ class QuotesUI {
   addItem(quoteId) {
     const id = (quoteId || '').toString().trim();
     if (!id) return;
-    const q = window.QuoteService?.get?.(id);
+    const q = window._svc('QuoteService')?.get?.(id);
     if (!q) return;
 
     const ui = window.quotesUI;
@@ -684,7 +690,7 @@ class QuotesUI {
     const id = (quoteId || '').toString().trim();
     const idx = Number(index);
     if (!id || !Number.isFinite(idx)) return;
-    const q = window.QuoteService?.get?.(id);
+    const q = window._svc('QuoteService')?.get?.(id);
     if (!q) return;
 
     const ui = window.quotesUI;
@@ -699,7 +705,7 @@ class QuotesUI {
   syncFromRepairParts(quoteId) {
     const id = (quoteId || '').toString().trim();
     if (!id) return;
-    const q = window.QuoteService?.get?.(id);
+    const q = window._svc('QuoteService')?.get?.(id);
     if (!q) return;
     const rid = (q.repairId || '').toString().trim();
     if (!rid) {
@@ -709,7 +715,7 @@ class QuotesUI {
       return;
     }
 
-    const parts = window.RepairPartsService?.getForRepair?.(rid) || [];
+    const parts = window._svc('RepairPartsService')?.getForRepair?.(rid) || [];
     const items = (parts || [])
       .filter(p => p && !p.isDeleted)
       .map(p => ({
@@ -809,7 +815,7 @@ class QuotesUI {
 
   _rerenderDetailModal(quoteId, { preserveScroll = true } = {}) {
     const id = (quoteId || '').toString().trim();
-    const q = window.QuoteService?.get?.(id);
+    const q = window._svc('QuoteService')?.get?.(id);
     if (!q) return;
 
     const modal = document.getElementById('quotes-modal');
@@ -827,7 +833,7 @@ class QuotesUI {
     } catch (_) {}
   }
   _renderRepairSelect(selectedRepairId = '') {
-    let repairs = window.RepairService?.getAll?.()?.filter(r => r && !r.isDeleted) || [];
+    let repairs = window._svc('RepairService')?.getAll?.()?.filter(r => r && !r.isDeleted) || [];
     // 需求：維修單號由新到舊排列（避免每次都從舊單開始翻）
     try {
       repairs = [...repairs].sort((a, b) => {
@@ -880,7 +886,7 @@ class QuotesUI {
   renderDetailModal(quote) {
     const q = QuoteModel.normalize(quote);
     const statuses = (AppConfig?.business?.quoteStatus || []).map(s => s.value);
-    const repair = window.RepairService?.get?.(q.repairId) || null;
+    const repair = window._svc('RepairService')?.get?.(q.repairId) || null;
     const customer = (q.customer || repair?.customer || '').toString();
     const machine = (repair?.machine || '').toString();
     const repairLabel = repair ? (repair.repairNo || repair.id || '') : (q.repairId || '');
@@ -1256,11 +1262,11 @@ Object.assign(QuotesUI, {
     el.innerHTML = `<div class="muted">載入中...</div>`;
 
     try {
-      if (!window.QuoteService || typeof window.QuoteService.getHistory !== 'function') {
+      if (!window._svc('QuoteService') || typeof window._svc('QuoteService').getHistory !== 'function') {
         el.innerHTML = `<div class="muted">History 模組尚未載入</div>`;
         return;
       }
-      const list = await window.QuoteService.getHistory(id);
+      const list = await window._svc('QuoteService').getHistory(id);
       const rows = Array.isArray(list) ? list : [];
       if (!rows.length) {
         el.innerHTML = `<div class="muted">尚無歷史紀錄</div>`;
@@ -1329,7 +1335,7 @@ Object.assign(QuotesUI, {
   reloadHistory(quoteId) {
     const id = (quoteId || '').toString().trim();
     if (!id) return;
-    try { window.QuoteService?._historyCache?.delete?.(id); } catch (_) {}
+    try { window._svc('QuoteService')?._historyCache?.delete?.(id); } catch (_) {}
     QuotesUI.renderHistory(id);
   },
 
@@ -1343,18 +1349,18 @@ async exportQuotePdf(quoteId) {
     try { QuotesUI.syncFromDOM(id); } catch (_) {}
 
     // 先確保核心服務已就緒（避免資料仍停留在舊快取）
-    try { if (window.QuoteService && typeof window.QuoteService.init === 'function') await window.QuoteService.init(); } catch (_) {}
-    try { if (window.RepairService && typeof window.RepairService.init === 'function') await window.RepairService.init(); } catch (_) {}
+    try { if (window._svc('QuoteService') && typeof window._svc('QuoteService').init === 'function') await window._svc('QuoteService').init(); } catch (_) {}
+    try { if (window._svc('RepairService') && typeof window._svc('RepairService').init === 'function') await window._svc('RepairService').init(); } catch (_) {}
     try {
       const cs = (typeof window._svc === 'function') ? window._svc('CustomerService') : null;
       if (cs && typeof cs.init === 'function') await cs.init();
     } catch (_) {}
 
-    const q0 = window.QuoteService?.get?.(id);
+    const q0 = window._svc('QuoteService')?.get?.(id);
     if (!q0) throw new Error('找不到報價資料');
     const q = window.QuoteModel?.normalize ? window.QuoteModel.normalize(q0) : q0;
 
-    const repair = window.RepairService?.get?.(q.repairId) || null;
+    const repair = window._svc('RepairService')?.get?.(q.repairId) || null;
 
     // 檢查 PDFLib
     const PDFLib = window.PDFLib;
@@ -1769,7 +1775,7 @@ async exportQuotePdf(quoteId) {
     }
 
     try {
-      const quote = await window.QuoteService.createFromRepair(rid);
+      const quote = await window._svc('QuoteService').createFromRepair(rid);
       window.quotesUI.closeModal();
       await window.quotesUI.update();
       QuotesUI.openDetail(quote.id);
@@ -1782,7 +1788,7 @@ async exportQuotePdf(quoteId) {
   },
 
   openDetail(quoteId) {
-    const q = window.QuoteService.get(quoteId);
+    const q = window._svc('QuoteService').get(quoteId);
     if (!q) return;
     try { window.quotesUI._setActiveQuote(q.id, q.items); } catch (_) {}
     window.quotesUI.openModal(window.quotesUI.renderDetailModal(q));
@@ -1795,7 +1801,7 @@ async exportQuotePdf(quoteId) {
     const form = event.target;
     const data = Object.fromEntries(new FormData(event.target).entries());
     const id = (data.id || '').trim();
-    const q = window.QuoteService.get(id);
+    const q = window._svc('QuoteService').get(id);
     if (!q) return;
 
     const countNum = Number(data.itemsCount ?? (q.items || []).length);
@@ -1857,7 +1863,7 @@ async exportQuotePdf(quoteId) {
     }
 
     try {
-      await window.QuoteService.upsert({
+      await window._svc('QuoteService').upsert({
         ...q,
         status: (data.status || q.status || '').toString(),
         currency: (data.currency || q.currency || '').toString(),
@@ -1884,7 +1890,7 @@ async exportQuotePdf(quoteId) {
       if (!ok) return;
     }
     try {
-      await window.QuoteService.remove(quoteId);
+      await window._svc('QuoteService').remove(quoteId);
       await window.quotesUI.update();
     } catch (e) {
       console.error(e);
@@ -1896,7 +1902,7 @@ async exportQuotePdf(quoteId) {
 
   async createOrderFromQuote(quoteId) {
     try {
-      const q = window.QuoteService?.get?.(quoteId) || null;
+      const q = window._svc('QuoteService')?.get?.(quoteId) || null;
       const canConvert = !!(window.quotesUI?._isApprovedStatus?.(q?.status));
       if (!canConvert) {
         const msg = '需先將報價狀態設定為「已核准（簽核）」才可轉訂單';
@@ -1904,24 +1910,24 @@ async exportQuotePdf(quoteId) {
         else alert(msg);
         return;
       }
-      if (!window.OrderService) {
+      if (!window._svc('OrderService')) {
         const msg = '訂單模組尚未載入';
         if (window.UI && typeof window.UI.toast === 'function') window.UI.toast(msg, { type: 'error' });
         else alert(msg);
         return;
       }
-      await window.OrderService.init();
+      await window._svc('OrderService').init();
       // 避免重複轉單：若已存在同 quoteId 的訂單，優先直接開啟
-      const existing = (typeof window.OrderService.getAll === 'function')
-        ? (window.OrderService.getAll() || []).find(o => (o?.quoteId || '') === quoteId && !o?.isDeleted)
+      const existing = (typeof window._svc('OrderService').getAll === 'function')
+        ? (window._svc('OrderService').getAll() || []).find(o => (o?.quoteId || '') === quoteId && !o?.isDeleted)
         : null;
 
       const created = !existing;
-      const order = existing || await window.OrderService.createFromQuote(quoteId, { requireApproved: true });
+      const order = existing || await window._svc('OrderService').createFromQuote(quoteId, { requireApproved: true });
 
       // 版本控制：將「轉訂單」行為記錄在報價歷史中（即使報價本體未變更）
       try {
-        await window.QuoteService?.addHistoryAction?.(quoteId, {
+        await window._svc('QuoteService')?.addHistoryAction?.(quoteId, {
           action: 'CONVERT_TO_ORDER',
           version: Number(q?.version || 1),
           summary: created

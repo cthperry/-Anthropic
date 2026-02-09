@@ -10,6 +10,9 @@
  * 5. 事件處理
  */
 
+
+// Phase 1：registry-first 取得 Service（避免直接 window.XxxService）
+// 注意：本專案為非 module script（同一 global scope），避免宣告可重複載入時會衝突的 top-level const。
 // ------------------------------------------------------------
 // HTML 轉義（避免 XSS / 屬性注入）
 // 注意：專案內多數模組使用 escapeHtml（camelCase），但此檔案部分程式碼
@@ -210,13 +213,13 @@ class RepairUI {
     const views = this.listSavedViews();
     const cur = (this._activeViewId || '').toString();
     return `
-      <div class="toolbar-group saved-views" onclick="event.stopPropagation();">
-        <select class="input sm sv-select" id="repairs-view-select" onchange="RepairUI.applySavedView(this.value)">
+      <div class="toolbar-group saved-views" data-stop-prop="1">
+        <select class="input sm sv-select" id="repairs-view-select" data-action="repairs.applySavedView">
           <option value="">檢視：預設</option>
           ${views.map(v => `<option value="${escapeHTML(v.id)}" ${v.id === cur ? 'selected' : ''}>${escapeHTML(v.name || '未命名')}</option>`).join('')}
         </select>
-        <button class="btn sm sv-btn" type="button" onclick="RepairUI.saveCurrentView()">⭐ 儲存檢視</button>
-        <button class="btn sm ghost sv-btn" type="button" onclick="RepairUI.manageViews()">⚙ 管理檢視</button>
+        <button class="btn sm sv-btn" type="button" data-action="repairs.saveCurrentView">⭐ 儲存檢視</button>
+        <button class="btn sm ghost sv-btn" type="button" data-action="repairs.manageViews">⚙ 管理檢視</button>
       </div>
     `;
   }
@@ -539,11 +542,11 @@ class RepairUI {
     const isAll = (!from && !to);
 
     return `
-      <div class="date-preset-chips" aria-label="完成日期快速範圍" onclick="event.stopPropagation();">
+      <div class="date-preset-chips" aria-label="完成日期快速範圍" data-stop-prop="1">
         <span class="muted" style="margin-right:6px;">完成日期：</span>
         ${presets.map(p => {
           const active = (p.key === 'all') ? isAll : (from === p.from && !to);
-          return `<button class="chip ${active ? 'active' : ''}" style="--chip-color:var(--color-secondary);" onclick="event.stopPropagation(); RepairUI.applyHistoryDatePreset('${p.key}')">${p.label}</button>`;
+          return `<button class="chip ${active ? 'active' : ''}" style="--chip-color:var(--color-secondary);" data-action="repairs.applyHistoryDatePreset" data-value="${p.key}">${p.label}</button>`;
         }).join('')}
       </div>
     `;
@@ -584,7 +587,7 @@ class RepairUI {
       <div class="repairs-list-footer">
         <div class="muted">已顯示 <span class="mono">${visible}</span> / <span class="mono">${total}</span> 筆</div>
         <div class="repairs-list-footer-actions">
-          ${hasMore ? `<button class="btn" onclick="RepairUI.loadMore()">顯示更多</button>` : `<span class="muted">已顯示全部</span>`}
+          ${hasMore ? `<button class="btn" data-action="repairs.loadMore">顯示更多</button>` : `<span class="muted">已顯示全部</span>`}
         </div>
       </div>
     `;
@@ -825,18 +828,18 @@ class RepairUI {
       : applied;
     const canClear = !!(v.trim() || applied.trim());
     return `
-      <div class="repairs-search" onclick="event.stopPropagation();">
+      <div class="repairs-search" data-stop-prop="1">
         <input
           id="repairs-keyword"
           class="input repairs-keyword"
           type="search"
           placeholder="關鍵字：客戶 / SN / 問題 / 單號（輸入後按搜尋）"
           value="${(v || '').replace(/"/g, '&quot;')}"
-          oninput="RepairUI.handleKeywordDraftInput(event)"
-          onkeydown="RepairUI.handleKeywordKeydown(event)"
+          
+          
         />
-        <button class="btn sm primary" title="搜尋" onclick="RepairUI.applyKeywordSearch()">搜尋</button>
-        <button id="repairs-keyword-clear" class="btn ghost sm" title="清除" onclick="RepairUI.clearKeyword()" ${canClear ? '' : 'disabled'}>✕</button>
+        <button class="btn sm primary" title="搜尋" data-action="repairs.applyKeywordSearch">搜尋</button>
+        <button id="repairs-keyword-clear" class="btn ghost sm" title="清除" data-action="repairs.clearKeyword" ${canClear ? '' : 'disabled'}>✕</button>
       </div>
     `;
   }
@@ -895,8 +898,8 @@ class RepairUI {
 
   getScopeCounts() {
     try {
-      const active = window.RepairService.search({ scope: 'active' }).length;
-      const history = window.RepairService.search({ scope: 'history' }).length;
+      const active = window._svc('RepairService').search({ scope: 'active' }).length;
+      const history = window._svc('RepairService').search({ scope: 'history' }).length;
       return { active, history };
     } catch (_) {
       return { active: 0, history: 0 };
@@ -909,8 +912,8 @@ class RepairUI {
     const isHistory = this.scope === 'history';
     return `
       <div class="scope-tabs" aria-label="進行中/歷史切換">
-        <button class="chip ${isActive ? 'active' : ''}" style="--chip-color:var(--color-primary);" onclick="event.stopPropagation(); RepairUI.setScope('active')">進行中 <span class="scope-count">${counts.active}</span></button>
-        <button class="chip ${isHistory ? 'active' : ''}" style="--chip-color:var(--color-primary);" onclick="event.stopPropagation(); RepairUI.setScope('history')">歷史（已完成） <span class="scope-count">${counts.history}</span></button>
+        <button class="chip ${isActive ? 'active' : ''}" style="--chip-color:var(--color-primary);" data-action="repairs.setScope" data-value="active">進行中 <span class="scope-count">${counts.active}</span></button>
+        <button class="chip ${isHistory ? 'active' : ''}" style="--chip-color:var(--color-primary);" data-action="repairs.setScope" data-value="history">歷史（已完成） <span class="scope-count">${counts.history}</span></button>
       </div>
     `;
   }
@@ -947,7 +950,7 @@ class RepairUI {
           const enc = encodeURIComponent(c.value || '');
           const style = `--chip-color:${c.color};`;
           return `
-            <button class="chip ${isActive ? 'active' : ''}" style="${style}" onclick="event.stopPropagation(); RepairUI.applyStatusChip('${enc}')">${c.label}</button>
+            <button class="chip ${isActive ? 'active' : ''}" style="${style}" data-action="repairs.applyStatusChip" data-value="${enc}">${c.label}</button>
           `;
         }).join('')}
       </div>
@@ -988,13 +991,13 @@ class RepairUI {
           
           <div class="module-toolbar-right">
             ${this.renderSavedViewsToolbar()}
-            <button class="btn" id="repairs-toggle-filters-btn" onclick="RepairUI.toggleFilters()">
+            <button class="btn" id="repairs-toggle-filters-btn" data-action="repairs.toggleFilters">
               ${this.filtersPanelOpen ? '🔍 收合篩選' : '🔍 篩選'}
             </button>
-            <button class="btn" onclick="RepairUI.sync()">
+            <button class="btn" data-action="repairs.sync">
               🔄 同步
             </button>
-            <button class="btn primary" onclick="RepairUI.openForm()">
+            <button class="btn primary" data-action="repairs.openForm">
               ➕ 新增維修單
             </button>
           </div>
@@ -1018,15 +1021,15 @@ class RepairUI {
       
       <!-- Modal 容器 -->
       <div id="repair-modal" class="modal" style="display: none;">
-        <div class="modal-backdrop" onclick="RepairUI.closeModal()"></div>
+        <div class="modal-backdrop" data-action="repairs.closeModal"></div>
         <div class="modal-content" id="repair-modal-content"></div>
       </div>
     `;
     
     // 預先載入客戶資料，確保「公司名稱」清單在維修表單中一致可用
     try {
-      if (window.CustomerService && typeof window.CustomerService.init === 'function') {
-        window.CustomerService.init().catch(e => console.warn('CustomerService init failed:', e));
+      if (window._svc('CustomerService') && typeof window._svc('CustomerService').init === 'function') {
+        window._svc('CustomerService').init().catch(e => console.warn('CustomerService init failed:', e));
       }
     } catch (e) {
       console.warn('CustomerService preload failed:', e);
@@ -1070,8 +1073,8 @@ class RepairUI {
             class="input"
             id="filter-keyword"
             placeholder="搜尋單號、序號、客戶...（輸入後按搜尋）"
-            oninput="RepairUI.handleKeywordDraftInput(event)"
-            onkeydown="RepairUI.handleKeywordKeydown(event)"
+            
+            
           />
         </div>
         
@@ -1134,8 +1137,8 @@ class RepairUI {
       </div>
 
       <div class="filters-actions">
-        <button class="btn primary" onclick="RepairUI.applyFilters()">🔍 搜尋</button>
-        <button class="btn" onclick="RepairUI.clearFilters()">🧹 清除篩選</button>
+        <button class="btn primary" data-action="repairs.applyFilters">🔍 搜尋</button>
+        <button class="btn" data-action="repairs.clearFilters">🧹 清除篩選</button>
       </div>
     `;
   }
@@ -1144,7 +1147,7 @@ class RepairUI {
    * 渲染統計卡片
    */
   renderStats(scopedOverride) {
-    const scoped = Array.isArray(scopedOverride) ? scopedOverride : window.RepairService.search(this.getEffectiveFilters());
+    const scoped = Array.isArray(scopedOverride) ? scopedOverride : window._svc('RepairService').search(this.getEffectiveFilters());
     const stats = window.RepairModel.getStats(scoped);
     const statuses = AppConfig.business.repairStatus;
     // 防呆：避免狀態設定被重複注入造成 KPI 重複
@@ -1186,7 +1189,7 @@ class RepairUI {
    * 渲染列表
    */
   renderList() {
-    let repairs = window.RepairService.search(this.getEffectiveFilters());
+    let repairs = window._svc('RepairService').search(this.getEffectiveFilters());
     repairs = window.RepairModel.sort(repairs, this.sortBy, this.sortOrder);
     
     if (repairs.length === 0) {
@@ -1215,7 +1218,7 @@ class RepairUI {
             <div class="repairs-right-block sort-block">
               <div class="repairs-list-sort">
               <label class="muted">排序：</label>
-              <select class="input" id="sort-by" onchange="RepairUI.handleSort()" style="width: 150px;">
+              <select class="input" id="sort-by" data-action="repairs.handleSort" style="width: 150px;">
                 <option value="updatedAt" ${this.sortBy === 'updatedAt' ? 'selected' : ''}>更新時間</option>
                 <option value="createdAt" ${this.sortBy === 'createdAt' ? 'selected' : ''}>建立時間</option>
                 <option value="completedAt" ${this.sortBy === 'completedAt' ? 'selected' : ''}>完成時間</option>
@@ -1223,7 +1226,7 @@ class RepairUI {
                 <option value="status" ${this.sortBy === 'status' ? 'selected' : ''}>狀態</option>
                 <option value="priority" ${this.sortBy === 'priority' ? 'selected' : ''}>優先級</option>
               </select>
-              <button class="btn" onclick="RepairUI.toggleSortOrder()" title="切換順序">
+              <button class="btn" data-action="repairs.toggleSortOrder" title="切換順序">
                 ${this.sortOrder === 'asc' ? '↑' : '↓'}
               </button>
             </div>
@@ -1278,7 +1281,7 @@ class RepairUI {
             <div class="repairs-right-block sort-block">
               <div class="repairs-list-sort">
               <label class="muted">排序：</label>
-              <select class="input" id="sort-by" onchange="RepairUI.handleSort()" style="width: 150px;">
+              <select class="input" id="sort-by" data-action="repairs.handleSort" style="width: 150px;">
                 <option value="updatedAt" ${this.sortBy === 'updatedAt' ? 'selected' : ''}>更新時間</option>
                 <option value="createdAt" ${this.sortBy === 'createdAt' ? 'selected' : ''}>建立時間</option>
                 <option value="completedAt" ${this.sortBy === 'completedAt' ? 'selected' : ''}>完成時間</option>
@@ -1286,7 +1289,7 @@ class RepairUI {
                 <option value="status" ${this.sortBy === 'status' ? 'selected' : ''}>狀態</option>
                 <option value="priority" ${this.sortBy === 'priority' ? 'selected' : ''}>優先級</option>
               </select>
-              <button class="btn" onclick="RepairUI.toggleSortOrder()" title="切換順序">
+              <button class="btn" data-action="repairs.toggleSortOrder" title="切換順序">
                 ${this.sortOrder === 'asc' ? '↑' : '↓'}
               </button>
             </div>
@@ -1411,7 +1414,7 @@ class RepairUI {
         : '未建立';
 
       return `
-        <div class="repair-linkage" onclick="event.stopPropagation();">
+        <div class="repair-linkage" data-stop-prop="1">
           <span class="chip quick static" style="--chip-color: var(--color-warning);">🧩 零件：${partsText}</span>
           <span class="chip quick static" style="--chip-color: var(--color-accent);">🧾 報價：${quoteText}</span>
           <span class="chip quick static" style="--chip-color: var(--color-secondary);">📦 訂單：${orderText}</span>
@@ -1503,8 +1506,8 @@ class RepairUI {
    * 渲染空狀態
    */
   renderEmptyState() {
-    const scopeTotal = (window.RepairService && typeof window.RepairService.search === 'function')
-      ? window.RepairService.search({ scope: this.scope }).length
+    const scopeTotal = (window._svc('RepairService') && typeof window._svc('RepairService').search === 'function')
+      ? window._svc('RepairService').search({ scope: this.scope }).length
       : 0;
 
     // scope 不視為「額外篩選」；避免歷史模式永遠顯示「有篩選」
@@ -1526,10 +1529,10 @@ class RepairUI {
 
         <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top: 6px;">
           ${hasExtraFilters ? `
-            <button class="btn" onclick="RepairUI.clearFilters()">🧹 清除篩選</button>
-            <button class="btn" id="repairs-empty-toggle-filters-btn" onclick="RepairUI.toggleFilters()">${this.filtersPanelOpen ? '🔍 收合篩選' : '🔍 開啟篩選'}</button>
+            <button class="btn" data-action="repairs.clearFilters">🧹 清除篩選</button>
+            <button class="btn" id="repairs-empty-toggle-filters-btn" data-action="repairs.toggleFilters">${this.filtersPanelOpen ? '🔍 收合篩選' : '🔍 開啟篩選'}</button>
           ` : ''}
-          <button class="btn primary" onclick="RepairUI.openForm()">➕ 新增維修單</button>
+          <button class="btn primary" data-action="repairs.openForm">➕ 新增維修單</button>
         </div>
       </div>
     `;
@@ -1552,8 +1555,8 @@ class RepairUI {
         filtered = Number(meta.filtered || 0);
         raw = meta.rawFilters || null;
       } else {
-        scopeTotal = window.RepairService.search({ scope: this.scope }).length;
-        filtered = window.RepairService.search(this.getEffectiveFilters()).length;
+        scopeTotal = window._svc('RepairService').search({ scope: this.scope }).length;
+        filtered = window._svc('RepairService').search(this.getEffectiveFilters()).length;
         raw = this.getEffectiveFilters();
       }
 
@@ -1601,7 +1604,7 @@ class RepairUI {
 
     let repairs = [];
     try {
-      repairs = window.RepairService.search(effective) || [];
+      repairs = window._svc('RepairService').search(effective) || [];
       repairs = window.RepairModel.sort(repairs, this.sortBy, this.sortOrder) || repairs;
     } catch (e) {
       console.warn('RepairUI.updateList search failed:', e);
@@ -1626,7 +1629,7 @@ class RepairUI {
 
     // 計數/統計：避免重複 search
     let scopeTotal = 0;
-    try { scopeTotal = window.RepairService.search({ scope: this.scope }).length; } catch (_) { scopeTotal = 0; }
+    try { scopeTotal = window._svc('RepairService').search({ scope: this.scope }).length; } catch (_) { scopeTotal = 0; }
 
     this.updateCount({ scopeTotal, filtered: total, rawFilters: effective });
     this.updateStats(repairs);
@@ -1640,7 +1643,7 @@ class RepairUI {
     if (this._eventsBound) return;
 
     // RepairService 在極早期（未登入/未 init）可能尚未就緒；此時不鎖死，讓下一次 render 再嘗試
-    if (!window.RepairService || typeof window.RepairService.onChange !== 'function') {
+    if (!window._svc('RepairService') || typeof window._svc('RepairService').onChange !== 'function') {
       console.warn('RepairService not ready; skip bindEvents');
       return;
     }
@@ -1653,7 +1656,7 @@ class RepairUI {
         try { this._unsubRepairChange(); } catch (_) {}
         this._unsubRepairChange = null;
       }
-      this._unsubRepairChange = window.RepairService.onChange((action, repair) => {
+      this._unsubRepairChange = window._svc('RepairService').onChange((action, repair) => {
         try {
           this.requestUpdateList();
         } catch (err) {
@@ -1729,15 +1732,26 @@ class RepairUI {
       const target = e.target;
       if (!target || !target.closest) return;
 
+      // 僅處理 Repairs 模組（含 Modal）範圍內的事件，避免干擾其他模組
+      const inRepairs = !!(target.closest('.repairs-module') || target.closest('#repair-modal'));
+      if (!inRepairs) return;
+
+      // 取代過去 inline event.stopPropagation() 的用途：點擊標記區塊不應觸發外層（例如卡片點擊/外部關閉）
+      if (target.closest('[data-stop-prop="1"]')) {
+        try { e.stopPropagation(); } catch (_) {}
+      }
+
       const el = target.closest('[data-action]');
       if (!el) return;
 
-      const action = el.getAttribute('data-action') || '';
-      const id = el.getAttribute('data-id') || '';
+      const action = (el.getAttribute('data-action') || '').toString();
+      const id = (el.getAttribute('data-id') || '').toString();
+      const value = (el.getAttribute('data-value') || '').toString();
+      const quickAdd = (el.getAttribute('data-quick-add') || '').toString();
 
       // 避免 a/button 預設行為
       if (el.tagName === 'A' || el.tagName === 'BUTTON') {
-        e.preventDefault();
+        try { e.preventDefault(); } catch (_) {}
       }
 
       const stop = () => {
@@ -1746,6 +1760,7 @@ class RepairUI {
 
       try {
         switch (action) {
+          // --- 既有卡片/連結動作 ---
           case 'repair-open-detail':
             // 允許冒泡，維持卡片點擊直覺
             if (window.RepairUI && typeof window.RepairUI.openDetail === 'function') {
@@ -1788,14 +1803,124 @@ class RepairUI {
             }
             return;
 
+          // --- Phase 1B：移除 inline on* 後，改由 data-action ---
+          case 'repairs.toggleFilters':
+            stop();
+            return window.RepairUI?.toggleFilters?.();
+
+          case 'repairs.sync':
+            stop();
+            return window.RepairUI?.sync?.(e);
+
+          case 'repairs.openForm':
+            stop();
+            return window.RepairUI?.openForm?.(id || null);
+
+          case 'repairs.closeModal':
+            stop();
+            return window.RepairUI?.closeModal?.();
+
+          case 'repairs.applyFilters':
+            stop();
+            return window.RepairUI?.applyFilters?.();
+
+          case 'repairs.clearFilters':
+            stop();
+            return window.RepairUI?.clearFilters?.();
+
+          case 'repairs.applyKeywordSearch':
+            stop();
+            return window.RepairUI?.applyKeywordSearch?.();
+
+          case 'repairs.clearKeyword':
+            stop();
+            return window.RepairUI?.clearKeyword?.();
+
+          case 'repairs.setScope':
+            stop();
+            return window.RepairUI?.setScope?.(value);
+
+          case 'repairs.applyStatusChip':
+            stop();
+            return window.RepairUI?.applyStatusChip?.(value);
+
+          case 'repairs.applyHistoryDatePreset':
+            stop();
+            return window.RepairUI?.applyHistoryDatePreset?.(value);
+
+          case 'repairs.loadMore':
+            stop();
+            return window.RepairUI?.loadMore?.();
+
+          case 'repairs.saveCurrentView':
+            stop();
+            return window.RepairUI?.saveCurrentView?.();
+
+          case 'repairs.manageViews':
+            stop();
+            return window.RepairUI?.manageViews?.();
+
+          case 'repairs.toggleSortOrder':
+            stop();
+            return window.RepairUI?.toggleSortOrder?.();
+
+          case 'repairs.templateManage':
+            stop();
+            return window.RepairUI?.templateManage?.();
+
+          case 'repairs.toggleCompanyDropdown':
+            stop();
+            return window.RepairUI?.toggleCompanyDropdown?.(e);
+
+          case 'repairs.toggleContactDropdown':
+            stop();
+            return window.RepairUI?.toggleContactDropdown?.(e);
+
+          case 'repairs.toggleMachineFilter':
+            stop();
+            return window.RepairUI?.toggleMachineFilter?.(e);
+
+          case 'repairs.switchDetailTab':
+            stop();
+            return window.RepairUI?.switchDetailTab?.(value);
+
+          case 'repairs.duplicateRepair':
+            stop();
+            return window.RepairUI?.duplicateRepair?.(id);
+
+          case 'repairs.confirmDelete':
+            stop();
+            return window.RepairUI?.confirmDelete?.(id);
+
+          case 'repairs.openRepairParts':
+            stop();
+            return window.RepairUI?.openRepairParts?.(id, (quickAdd === '1' || quickAdd === 'true') ? { quickAdd: true } : undefined);
+
+          // --- MNT：從維修單連動 ---
+          case 'repairs.openMaintenanceFromRepair':
+            stop();
+            return window.RepairUI?.openMaintenanceFromRepair?.(id);
+
+          case 'repairs.createMaintenanceEquipmentFromRepair':
+            stop();
+            return window.RepairUI?.createMaintenanceEquipmentFromRepair?.(id);
+
+          case 'repairs.addMaintenanceRecordFromRepair':
+            stop();
+            return window.RepairUI?.addMaintenanceRecordFromRepair?.(id);
+
+          case 'repairs.closeAndWriteMaintenance':
+            stop();
+            return window.RepairUI?.closeAndWriteMaintenance?.(id);
+
           default:
             return;
         }
       } catch (err) {
         if (window.ErrorHandler && typeof window.ErrorHandler.handle === 'function') {
-          window.ErrorHandler.handle(err, 'Repairs', 'MEDIUM', { action, id });
+          window.ErrorHandler.handle(err, 'Repairs', 'MEDIUM', { action, id, value });
         } else {
-          console.error('Delegated click failed:', action, id, err);
+          console.error('Delegated click failed:', action, id, value, err);
         }
       }
     };
@@ -1804,6 +1929,86 @@ class RepairUI {
 
     // 綁在 document，避免列表/詳情 render 重建造成 handler 消失
     document.addEventListener('click', this._delegatedClickHandler);
+
+    // Input/Change/Keydown：取代 inline oninput/onchange/onkeydown
+    if (!this._delegatedInputHandler) {
+      this._delegatedInputHandler = (ev) => {
+        try {
+          const t = ev.target;
+          if (!t || !t.closest) return;
+          if (!(t.closest('.repairs-module') || t.closest('#repair-modal'))) return;
+          if (t.id === 'repairs-keyword' || t.id === 'filter-keyword') {
+            window.RepairUI?.handleKeywordDraftInput?.(ev);
+            return;
+          }
+          const act = (t.getAttribute && t.getAttribute('data-action')) ? (t.getAttribute('data-action') || '').toString() : '';
+          if (act === 'repairs.handleProgressChange') return window.RepairUI?.handleProgressChange?.(ev);
+          if (act === 'repairs.handleCustomerPick') return window.RepairUI?.handleCustomerPick?.(ev);
+          if (act === 'repairs.handleContactPick') return window.RepairUI?.handleContactPick?.(ev);
+          if (act === 'repairs.handleMachineSearchInput') return window.RepairUI?.handleMachineSearchInput?.(ev);
+          if (act === 'repairs.handleMachineManualInput') return window.RepairUI?.handleMachineManualInput?.(ev);
+        } catch (_) {}
+      };
+      document.addEventListener('input', this._delegatedInputHandler);
+    }
+
+    if (!this._delegatedKeydownHandler) {
+      this._delegatedKeydownHandler = (ev) => {
+        try {
+          const t = ev.target;
+          if (!t || !t.closest) return;
+          if (!(t.closest('.repairs-module') || t.closest('#repair-modal'))) return;
+          if (t.id === 'repairs-keyword' || t.id === 'filter-keyword') {
+            window.RepairUI?.handleKeywordKeydown?.(ev);
+          }
+        } catch (_) {}
+      };
+      document.addEventListener('keydown', this._delegatedKeydownHandler);
+    }
+
+    if (!this._delegatedChangeHandler) {
+      this._delegatedChangeHandler = (ev) => {
+        try {
+          const t = ev.target;
+          if (!t || !t.closest) return;
+          if (!(t.closest('.repairs-module') || t.closest('#repair-modal'))) return;
+
+          if (t.id === 'repairs-view-select') {
+            window.RepairUI?.applySavedView?.(t.value);
+            return;
+          }
+          if (t.id === 'sort-by') {
+            window.RepairUI?.handleSort?.();
+            return;
+          }
+
+          const act = (t.getAttribute && t.getAttribute('data-action')) ? (t.getAttribute('data-action') || '').toString() : '';
+          if (act === 'repairs.applySavedView') return window.RepairUI?.applySavedView?.(t.value);
+          if (act === 'repairs.handleSort') return window.RepairUI?.handleSort?.();
+          if (act === 'repairs.handleStatusChange') return window.RepairUI?.handleStatusChange?.(ev);
+          if (act === 'repairs.handleProductLineChange') return window.RepairUI?.handleProductLineChange?.(ev);
+          if (act === 'repairs.handleMachineSelectChange') return window.RepairUI?.handleMachineSelectChange?.(ev);
+          if (act === 'repairs.handleNeedPartsChange') return window.RepairUI?.handleNeedPartsChange?.(ev);
+        } catch (_) {}
+      };
+      document.addEventListener('change', this._delegatedChangeHandler);
+    }
+
+    if (!this._delegatedSubmitHandler) {
+      this._delegatedSubmitHandler = (ev) => {
+        try {
+          const t = ev.target;
+          if (!t || !t.closest) return;
+          if (!(t.closest('.repairs-module') || t.closest('#repair-modal'))) return;
+          if (t.id === 'repair-form' || (t.getAttribute && t.getAttribute('data-action') === 'repairs.handleSubmit')) {
+            try { ev.preventDefault(); } catch (_) {}
+            window.RepairUI?.handleSubmit?.(ev);
+          }
+        } catch (_) {}
+      };
+      document.addEventListener('submit', this._delegatedSubmitHandler, true);
+    }
+
   }
 
 
@@ -1817,8 +2022,8 @@ class RepairUI {
     if (!repairId) return;
 
     // 以較可判讀的資訊提示使用者
-    const r = (window.RepairService && typeof window.RepairService.get === 'function')
-      ? window.RepairService.get(repairId)
+    const r = (window._svc('RepairService') && typeof window._svc('RepairService').get === 'function')
+      ? window._svc('RepairService').get(repairId)
       : null;
 
     const title = (r && (r.repairNo || r.id)) ? (r.repairNo || r.id) : repairId;
@@ -1840,11 +2045,11 @@ ${hint}` : ''}
     }
 
     try {
-      if (!window.RepairService || typeof window.RepairService.delete !== 'function') {
+      if (!window._svc('RepairService') || typeof window._svc('RepairService').delete !== 'function') {
         throw new Error('RepairService 尚未就緒');
       }
 
-      await window.RepairService.delete(repairId);
+      await window._svc('RepairService').delete(repairId);
 
       // 若目前有開啟詳情/表單 modal，刪除後直接關閉避免殘留
       try {
@@ -1886,11 +2091,11 @@ ${hint}` : ''}
 
       const hasCompany = (name) => {
         const key = norm(name);
-        if (!key || !window.CustomerService) return false;
+        if (!key || !window._svc('CustomerService')) return false;
         try {
-          const all = (typeof window.CustomerService.getAll === 'function')
-            ? window.CustomerService.getAll()
-            : (Array.isArray(window.CustomerService.customers) ? window.CustomerService.customers : []);
+          const all = (typeof window._svc('CustomerService').getAll === 'function')
+            ? window._svc('CustomerService').getAll()
+            : (Array.isArray(window._svc('CustomerService').customers) ? window._svc('CustomerService').customers : []);
           return (all || []).some(c => c && !c.isDeleted && norm(c.name) === key);
         } catch (_) {
           return false;
@@ -1936,7 +2141,7 @@ ${hint}` : ''}
         try { if (typeof this._closeContactDropdown === 'function') this._closeContactDropdown(true); } catch (_) {}
       }
 
-      if (!window.CustomerService) {
+      if (!window._svc('CustomerService')) {
         this._lastCustomerCompany = company;
         this._lastCustomerCompanyValid = false;
         try { if (customerEl) customerEl.dataset.companyPicked = '0'; } catch (_) {}
@@ -1949,8 +2154,8 @@ ${hint}` : ''}
       // 記錄：是否已「選定有效公司」（用於公司下拉行為判斷：避免必須先刪除才看得到完整清單）
       try { if (customerEl) customerEl.dataset.companyPicked = isValidCompany ? '1' : '0'; } catch (_) {}
 
-      const contacts = (isValidCompany && typeof window.CustomerService.getContactsByCompanyName === 'function')
-        ? window.CustomerService.getContactsByCompanyName(company)
+      const contacts = (isValidCompany && typeof window._svc('CustomerService').getContactsByCompanyName === 'function')
+        ? window._svc('CustomerService').getContactsByCompanyName(company)
         : [];
 
       // 更新聯絡人 datalist
@@ -1969,8 +2174,8 @@ ${hint}` : ''}
 
         // 1) 最近一次維修單（同公司）有聯絡人者
         try {
-          if (window.RepairService && typeof window.RepairService.getAll === "function") {
-            const all = window.RepairService.getAll() || [];
+          if (window._svc('RepairService') && typeof window._svc('RepairService').getAll === "function") {
+            const all = window._svc('RepairService').getAll() || [];
             const ckey = norm(company);
             const toTs = (r) => {
               const a = r && (r.updatedAt || r.createdAt || r.createdDate || "");
@@ -2016,7 +2221,7 @@ ${hint}` : ''}
     try {
       const contactName = (event && event.target ? event.target.value : '').trim();
       if (!contactName) return;
-      if (!window.CustomerService) return;
+      if (!window._svc('CustomerService')) return;
 
       const companyEl = document.querySelector('#repair-form input[name="customer"]');
       const company = (companyEl && companyEl.value ? companyEl.value : '').trim();
@@ -2025,8 +2230,8 @@ ${hint}` : ''}
       const phoneEl = document.querySelector('#repair-form input[name="phone"]');
       const emailEl = document.querySelector('#repair-form input[name="email"]');
 
-      const match = (typeof window.CustomerService.findContact === 'function')
-        ? window.CustomerService.findContact(company, contactName)
+      const match = (typeof window._svc('CustomerService').findContact === 'function')
+        ? window._svc('CustomerService').findContact(company, contactName)
         : null;
 
       if (!match) return;
@@ -2106,14 +2311,14 @@ ${hint}` : ''}
       const customerEl = this._getFormEl('customer');
       if (!customerEl) return;
 
-      if (!window.CustomerService) return;
+      if (!window._svc('CustomerService')) return;
 
       // 取得公司清單（去重）
       let all = [];
       try {
-        all = (typeof window.CustomerService.getAll === 'function')
-          ? (window.CustomerService.getAll() || [])
-          : (Array.isArray(window.CustomerService.customers) ? window.CustomerService.customers : []);
+        all = (typeof window._svc('CustomerService').getAll === 'function')
+          ? (window._svc('CustomerService').getAll() || [])
+          : (Array.isArray(window._svc('CustomerService').customers) ? window._svc('CustomerService').customers : []);
       } catch (_) {
         all = [];
       }
@@ -2332,9 +2537,9 @@ ${hint}` : ''}
 
       const company = (companyEl.value || '').toString().trim();
       if (!company) return;
-      if (!window.CustomerService || typeof window.CustomerService.getContactsByCompanyName !== 'function') return;
+      if (!window._svc('CustomerService') || typeof window._svc('CustomerService').getContactsByCompanyName !== 'function') return;
 
-      const raw = window.CustomerService.getContactsByCompanyName(company) || [];
+      const raw = window._svc('CustomerService').getContactsByCompanyName(company) || [];
       const list = (raw || [])
         .filter(c => c && (c.contact || '').toString().trim())
         .map(c => ({
@@ -2502,12 +2707,12 @@ ${hint}` : ''}
       const cur = (customerEl?.value || '').toString().trim();
       this._lastCustomerCompany = cur;
       // 是否存在於客戶主檔（避免使用者輸入中途字串被誤判）
-      if (window.CustomerService) {
+      if (window._svc('CustomerService')) {
         const norm = (s) => (s || '').toString().trim().toLowerCase();
         const key = norm(cur);
-        const all = (typeof window.CustomerService.getAll === 'function')
-          ? window.CustomerService.getAll()
-          : (Array.isArray(window.CustomerService.customers) ? window.CustomerService.customers : []);
+        const all = (typeof window._svc('CustomerService').getAll === 'function')
+          ? window._svc('CustomerService').getAll()
+          : (Array.isArray(window._svc('CustomerService').customers) ? window._svc('CustomerService').customers : []);
         this._lastCustomerCompanyValid = !!(key && (all || []).some(c => c && !c.isDeleted && norm(c.name) === key));
       } else {
         this._lastCustomerCompanyValid = false;
@@ -2645,8 +2850,8 @@ ${hint}` : ''}
    */
   async getSettingsSafe() {
     try {
-      if (window.SettingsService && typeof window.SettingsService.getSettings === 'function') {
-        const s = await window.SettingsService.getSettings();
+      if (window._svc('SettingsService') && typeof window._svc('SettingsService').getSettings === 'function') {
+        const s = await window._svc('SettingsService').getSettings();
         return s || (window.SettingsModel ? window.SettingsModel.defaultSettings() : {});
       }
     } catch (e) {
@@ -2668,18 +2873,18 @@ ${hint}` : ''}
       const machine = (document.getElementById('machine-final')?.value || '').toString().trim();
       const excludeId = (document.querySelector('#repair-form input[name="id"]')?.value || '').toString().trim();
 
-      if (!customer || !machine || !window.RepairService) {
+      if (!customer || !machine || !window._svc('RepairService')) {
         wrap.style.display = 'none';
         chipsEl.innerHTML = '';
         return;
       }
 
       let serials = [];
-      if (typeof window.RepairService.getRecentSerialNumbers === 'function') {
-        serials = window.RepairService.getRecentSerialNumbers({ customer, machine, excludeId, limit: 6 }) || [];
-      } else if (typeof window.RepairService.getAll === 'function') {
+      if (typeof window._svc('RepairService').getRecentSerialNumbers === 'function') {
+        serials = window._svc('RepairService').getRecentSerialNumbers({ customer, machine, excludeId, limit: 6 }) || [];
+      } else if (typeof window._svc('RepairService').getAll === 'function') {
         // fallback：使用 getAll() 篩選（較慢，但保底）
-        const all = window.RepairService.getAll() || [];
+        const all = window._svc('RepairService').getAll() || [];
         const toEpoch = (window.TimeUtils && typeof window.TimeUtils.toEpoch === "function")
           ? ((v, fb = 0) => window.TimeUtils.toEpoch(v, fb))
           : ((v, fb = 0) => { const t = Date.parse(String(v ?? "")); return Number.isFinite(t) ? t : fb; });
@@ -2813,8 +3018,8 @@ ${hint}` : ''}
 
   getRecentCompanies(limit, pinnedKeys) {
     try {
-      if (!window.RepairService || typeof window.RepairService.getAll !== 'function') return [];
-      const list = window.RepairService.getAll() || [];
+      if (!window._svc('RepairService') || typeof window._svc('RepairService').getAll !== 'function') return [];
+      const list = window._svc('RepairService').getAll() || [];
       const toTs = (x) => {
         const t = new Date(x || 0).getTime();
         return Number.isFinite(t) ? t : 0;
@@ -2885,7 +3090,7 @@ ${hint}` : ''}
    */
   async togglePinnedCompany(company) {
     if (!company) return;
-    if (!window.SettingsService || typeof window.SettingsService.getSettings !== 'function') return;
+    if (!window._svc('SettingsService') || typeof window._svc('SettingsService').getSettings !== 'function') return;
 
     const settings = await this.getSettingsSafe();
     const arr = Array.isArray(settings.pinnedCompanies) ? [...settings.pinnedCompanies] : [];
@@ -2899,7 +3104,7 @@ ${hint}` : ''}
       arr.unshift(company);
     }
 
-    await window.SettingsService.update({
+    await window._svc('SettingsService').update({
       pinnedTopN: settings.pinnedTopN || 8,
       pinnedCompanies: arr
     });
@@ -2921,7 +3126,7 @@ ${hint}` : ''}
       else alert(msg);
       return;
     }
-    if (!window.RepairService || typeof window.RepairService.getAll !== 'function') {
+    if (!window._svc('RepairService') || typeof window._svc('RepairService').getAll !== 'function') {
       const msg = 'RepairService 尚未就緒';
       if (window.UI && typeof window.UI.toast === 'function') window.UI.toast(msg, { type: 'error' });
       else alert(msg);
@@ -2929,7 +3134,7 @@ ${hint}` : ''}
     }
 
     // build list
-    const all = window.RepairService.getAll() || [];
+    const all = window._svc('RepairService').getAll() || [];
     const toTs = (x) => {
       const t = new Date(x || 0).getTime();
       return Number.isFinite(t) ? t : 0;
@@ -3084,7 +3289,7 @@ ${hint}` : ''}
    * 僅覆寫聯絡/設備欄位，不影響問題描述/工作內容。
    */
   async applyHistoryToForm(repairId) {
-    const r = window.RepairService?.get?.(repairId);
+    const r = window._svc('RepairService')?.get?.(repairId);
     if (!r) return;
 
     const form = document.getElementById('repair-form');
@@ -3501,21 +3706,24 @@ ${hint}` : ''}
   /**
    * 同步資料
    */
-  static async sync() {
+  static async sync(ev) {
     try {
-      const btn = event.target;
-      btn.disabled = true;
-      btn.textContent = '🔄 同步中...';
+      const e = ev || (typeof window !== 'undefined' ? window.event : null);
+      const btn = (e && e.target) ? e.target : null;
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '🔄 同步中...';
+      }
       
-      await window.RepairService.sync();
+      await window._svc('RepairService').sync();
       
       const instance = window.repairUI;
       instance.updateList();
       
-      btn.textContent = '✅ 同步完成';
+      if (btn) btn.textContent = '✅ 同步完成';
       setTimeout(() => {
-        btn.disabled = false;
-        btn.textContent = '🔄 同步';
+        if (btn) btn.disabled = false;
+        if (btn) btn.textContent = '🔄 同步';
       }, 2000);
       
     } catch (error) {
@@ -3559,7 +3767,7 @@ ${hint}` : ''}
    */
   static async openForm(repairId = null) {
     const instance = window.repairUI;
-    instance.currentRepair = repairId ? window.RepairService.get(repairId) : null;
+    instance.currentRepair = repairId ? window._svc('RepairService').get(repairId) : null;
 
     const modal = document.getElementById('repair-modal');
     const content = document.getElementById('repair-modal-content');
@@ -3583,7 +3791,7 @@ ${hint}` : ''}
       <div class="modal-dialog">
         <div class="modal-header">
           <h3>${repairId ? '編輯維修單' : '新增維修單'}</h3>
-          <button class="modal-close" onclick="RepairUI.closeModal()">✕</button>
+          <button class="modal-close" type="button" data-action="repairs.closeModal">✕</button>
         </div>
         <div class="modal-body">
           <div class="muted">載入中...</div>
@@ -3593,8 +3801,8 @@ ${hint}` : ''}
 
     // 確保 CustomerService 已初始化，避免「公司名稱」清單偶發空白
     try {
-      if (window.CustomerService && typeof window.CustomerService.init === 'function') {
-        await window.CustomerService.init();
+      if (window._svc('CustomerService') && typeof window._svc('CustomerService').init === 'function') {
+        await window._svc('CustomerService').init();
       }
     } catch (e) {
       console.warn('CustomerService init skipped:', e);
@@ -3602,8 +3810,8 @@ ${hint}` : ''}
 
     // 初始化 Settings（提供「常用公司 Top N / 最近使用 / 歷史帶入」）
     try {
-      if (window.SettingsService && typeof window.SettingsService.init === 'function' && !window.SettingsService.isInitialized) {
-        await window.SettingsService.init();
+      if (window._svc('SettingsService') && typeof window._svc('SettingsService').init === 'function' && !window._svc('SettingsService').isInitialized) {
+        await window._svc('SettingsService').init();
       }
     } catch (e) {
       console.warn('SettingsService init skipped:', e);
@@ -3613,8 +3821,8 @@ ${hint}` : ''}
     try {
       if (window.Utils && typeof window.Utils.ensureServiceReady === 'function') {
         await window.Utils.ensureServiceReady('RepairTemplatesService');
-      } else if (window.RepairTemplatesService && typeof window.RepairTemplatesService.init === 'function' && !window.RepairTemplatesService.ready) {
-        await window.RepairTemplatesService.init();
+      } else if (window._svc('RepairTemplatesService') && typeof window._svc('RepairTemplatesService').init === 'function' && !window._svc('RepairTemplatesService').ready) {
+        await window._svc('RepairTemplatesService').init();
       }
     } catch (e) {
       console.warn('RepairTemplatesService init skipped:', e);
@@ -3667,7 +3875,7 @@ ${hint}` : ''}
   
 static openDetail(repairId) {
     const instance = window.repairUI;
-    instance.currentRepair = window.RepairService.get(repairId);
+    instance.currentRepair = window._svc('RepairService').get(repairId);
     
     if (!instance.currentRepair) {
       {
@@ -3720,21 +3928,21 @@ static openDetail(repairId) {
             } else {
               // fallback（保留舊行為，避免 utils 未載入時失效）
               try {
-                if (window.QuoteService && typeof window.QuoteService.init === 'function' && !window.QuoteService.isInitialized) {
-                  await window.QuoteService.init();
+                if (window._svc('QuoteService') && typeof window._svc('QuoteService').init === 'function' && !window._svc('QuoteService').isInitialized) {
+                  await window._svc('QuoteService').init();
                 }
-                if (window.QuoteService && typeof window.QuoteService.loadAll === 'function') {
-                  await window.QuoteService.loadAll();
+                if (window._svc('QuoteService') && typeof window._svc('QuoteService').loadAll === 'function') {
+                  await window._svc('QuoteService').loadAll();
                 }
               } catch (e) {
                 console.warn('RepairUI: QuoteService init/load failed', e);
               }
               try {
-                if (window.OrderService && typeof window.OrderService.init === 'function' && !window.OrderService.isInitialized) {
-                  await window.OrderService.init();
+                if (window._svc('OrderService') && typeof window._svc('OrderService').init === 'function' && !window._svc('OrderService').isInitialized) {
+                  await window._svc('OrderService').init();
                 }
-                if (window.OrderService && typeof window.OrderService.loadAll === 'function') {
-                  await window.OrderService.loadAll();
+                if (window._svc('OrderService') && typeof window._svc('OrderService').loadAll === 'function') {
+                  await window._svc('OrderService').loadAll();
                 }
               } catch (e) {
                 console.warn('RepairUI: OrderService init/load failed', e);
@@ -3745,6 +3953,17 @@ static openDetail(repairId) {
           }
         } catch (e) {
           console.warn('RepairUI: quote/order mini load failed', e);
+        }
+      }, 0);
+
+      // 延後載入：工作記錄（WorkLog）
+      setTimeout(async () => {
+        try {
+          if (window.WorkLogUI && typeof window.WorkLogUI.loadWorkLogSection === 'function') {
+            await window.WorkLogUI.loadWorkLogSection(repairId);
+          }
+        } catch (e) {
+          console.warn('RepairUI: worklog section load failed', e);
         }
       }, 0);
     }
@@ -3800,18 +4019,18 @@ static openDetail(repairId) {
     if (!host) return;
 
     // 零件模組可能尚未初始化：在此做最低限度 init + load
-    if (!window.RepairPartsService) {
+    if (!window._svc('RepairPartsService')) {
       host.innerHTML = '<div class="muted">零件模組未載入</div>';
       return;
     }
 
     try {
-      if (!window.RepairPartsService.isInitialized) {
-        await window.RepairPartsService.init();
+      if (!window._svc('RepairPartsService').isInitialized) {
+        await window._svc('RepairPartsService').init();
       }
-      await window.RepairPartsService.loadAll();
+      await window._svc('RepairPartsService').loadAll();
 
-      const items = (window.RepairPartsService.listForRepair(repairId) || [])
+      const items = (window._svc('RepairPartsService').listForRepair(repairId) || [])
         .filter(i => !i.isDeleted);
 
       if (items.length === 0) {
@@ -3960,8 +4179,8 @@ static openDetail(repairId) {
     if(!sel) return;
 
     // fill options
-    const list = (window.RepairTemplatesService && typeof window.RepairTemplatesService.getEnabled === 'function')
-      ? window.RepairTemplatesService.getEnabled()
+    const list = (window._svc('RepairTemplatesService') && typeof window._svc('RepairTemplatesService').getEnabled === 'function')
+      ? window._svc('RepairTemplatesService').getEnabled()
       : [];
     sel.innerHTML = `<option value="">（不使用模板）</option>` + list.map(t=>{
       const name = escapeHTML((t.name||'').toString());
@@ -3971,7 +4190,7 @@ static openDetail(repairId) {
     sel.onchange = ()=>{
       const id = sel.value;
       if(!id) return;
-      const t = window.RepairTemplatesService ? window.RepairTemplatesService.getById(id) : null;
+      const t = window._svc('RepairTemplatesService') ? window._svc('RepairTemplatesService').getById(id) : null;
       if(!t) return;
       this.applyTemplateToForm(t);
       // reset select back to blank to allow re-apply
@@ -4043,7 +4262,7 @@ static openDetail(repairId) {
   // MNT-4 - Repairs ↔ Maintenance linkage
   // ===============================
   _maintenanceSvc(){
-    try { return window._svc ? window._svc('MaintenanceService') : window.MaintenanceService; } catch (_) { return window.MaintenanceService; }
+    try { return window._svc ? window._svc('MaintenanceService') : window._svc('MaintenanceService'); } catch (_) { return window._svc('MaintenanceService'); }
   }
 
   async _ensureMaintenanceReady(){
@@ -4064,7 +4283,7 @@ static openDetail(repairId) {
   }
 
   _getRepairById(repairId){
-    try { return window.RepairService?.get?.(repairId) || null; } catch (_) { return null; }
+    try { return window._svc('RepairService')?.get?.(repairId) || null; } catch (_) { return null; }
   }
 
   _buildMaintenancePrefillFromRepair(repair){
@@ -4174,10 +4393,10 @@ static openDetail(repairId) {
 
     // 動作列：依狀態調整文案（不做 disabled，維持流程可用性；邏輯於 handler 內防呆）
     act.innerHTML = `
-      <button class="chip" type="button" onclick="RepairUI.openMaintenanceFromRepair('${esc(rid)}')">開啟保養</button>
-      <button class="chip" type="button" onclick="RepairUI.createMaintenanceEquipmentFromRepair('${esc(rid)}')">建立設備</button>
-      <button class="chip" type="button" onclick="RepairUI.addMaintenanceRecordFromRepair('${esc(rid)}')">＋建紀錄</button>
-      <button class="chip" type="button" onclick="RepairUI.closeAndWriteMaintenance('${esc(rid)}')">${esc(btnCloseText)}</button>
+      <button class="chip" type="button" data-action="repairs.openMaintenanceFromRepair" data-id="${esc(rid)}">開啟保養</button>
+      <button class="chip" type="button" data-action="repairs.createMaintenanceEquipmentFromRepair" data-id="${esc(rid)}">建立設備</button>
+      <button class="chip" type="button" data-action="repairs.addMaintenanceRecordFromRepair" data-id="${esc(rid)}">＋建紀錄</button>
+      <button class="chip" type="button" data-action="repairs.closeAndWriteMaintenance" data-id="${esc(rid)}">${esc(btnCloseText)}</button>
     `.trim();
   }
 
@@ -4321,15 +4540,15 @@ static openDetail(repairId) {
         // 來源：零件追蹤（最佳努力；若未初始化，嘗試 init/loadAll）
         let parts = [];
         try {
-          if (window.RepairPartsService && typeof window.RepairPartsService.listForRepair === 'function') {
-            if (!window.RepairPartsService.isInitialized && typeof window.RepairPartsService.init === 'function') {
-              await window.RepairPartsService.init();
+          if (window._svc('RepairPartsService') && typeof window._svc('RepairPartsService').listForRepair === 'function') {
+            if (!window._svc('RepairPartsService').isInitialized && typeof window._svc('RepairPartsService').init === 'function') {
+              await window._svc('RepairPartsService').init();
             }
-            if (typeof window.RepairPartsService.loadAll === 'function') {
-              await window.RepairPartsService.loadAll();
+            if (typeof window._svc('RepairPartsService').loadAll === 'function') {
+              await window._svc('RepairPartsService').loadAll();
             }
 
-            const items = (window.RepairPartsService.listForRepair(rid) || []).filter(i => i && !i.isDeleted);
+            const items = (window._svc('RepairPartsService').listForRepair(rid) || []).filter(i => i && !i.isDeleted);
             const used = items.filter(i => String(i.status||'').trim() === '已更換');
 
             parts = used.map(i => {
@@ -4377,8 +4596,8 @@ static openDetail(repairId) {
       // 4) 結案（狀態/進度）
       try {
         const needUpdate = (String(repair.status||'') !== '已完成') || (Number(repair.progress) !== 100);
-        if (needUpdate && window.RepairService && typeof window.RepairService.update === 'function') {
-          await window.RepairService.update(rid, { status: '已完成', progress: 100, historyNote: '結案並寫入保養紀錄' });
+        if (needUpdate && window._svc('RepairService') && typeof window._svc('RepairService').update === 'function') {
+          await window._svc('RepairService').update(rid, { status: '已完成', progress: 100, historyNote: '結案並寫入保養紀錄' });
         }
       } catch (e) {
         console.warn('RepairUI: close repair failed (non-fatal)', e);
@@ -4425,24 +4644,24 @@ static openDetail(repairId) {
   let qLatest = null, oLatest = null;
 
   try{
-    if(window.QuoteService){
-      if(typeof window.QuoteService.getSummaryForRepair === 'function'){
-        const s = window.QuoteService.getSummaryForRepair(rid) || {};
+    if(window._svc('QuoteService')){
+      if(typeof window._svc('QuoteService').getSummaryForRepair === 'function'){
+        const s = window._svc('QuoteService').getSummaryForRepair(rid) || {};
         qCount = Number(s.count)||0;
         qLatest = s.latest || null;
-      }else if(typeof window.QuoteService.getForRepair === 'function'){
-        const arr = await window.QuoteService.getForRepair(rid);
+      }else if(typeof window._svc('QuoteService').getForRepair === 'function'){
+        const arr = await window._svc('QuoteService').getForRepair(rid);
         qCount = Array.isArray(arr) ? arr.length : 0;
         qLatest = pickLatest(arr);
       }
     }
-    if(window.OrderService){
-      if(typeof window.OrderService.getSummaryForRepair === 'function'){
-        const s = window.OrderService.getSummaryForRepair(rid) || {};
+    if(window._svc('OrderService')){
+      if(typeof window._svc('OrderService').getSummaryForRepair === 'function'){
+        const s = window._svc('OrderService').getSummaryForRepair(rid) || {};
         oCount = Number(s.count)||0;
         oLatest = s.latest || null;
-      }else if(typeof window.OrderService.getForRepair === 'function'){
-        const arr = await window.OrderService.getForRepair(rid);
+      }else if(typeof window._svc('OrderService').getForRepair === 'function'){
+        const arr = await window._svc('OrderService').getForRepair(rid);
         oCount = Array.isArray(arr) ? arr.length : 0;
         oLatest = pickLatest(arr);
       }
@@ -4508,18 +4727,18 @@ static openDetail(repairId) {
 
   let target = null;
   try{
-    if(window.QuoteService){
-      if(typeof window.QuoteService.getLatestForRepair === 'function'){
-        target = window.QuoteService.getLatestForRepair(rid);
-      }else if(typeof window.QuoteService.getSummaryForRepair === 'function'){
-        target = window.QuoteService.getSummaryForRepair(rid)?.latest || null;
-      }else if(typeof window.QuoteService.getForRepair === 'function'){
-        const arr = await window.QuoteService.getForRepair(rid);
+    if(window._svc('QuoteService')){
+      if(typeof window._svc('QuoteService').getLatestForRepair === 'function'){
+        target = window._svc('QuoteService').getLatestForRepair(rid);
+      }else if(typeof window._svc('QuoteService').getSummaryForRepair === 'function'){
+        target = window._svc('QuoteService').getSummaryForRepair(rid)?.latest || null;
+      }else if(typeof window._svc('QuoteService').getForRepair === 'function'){
+        const arr = await window._svc('QuoteService').getForRepair(rid);
         target = (window.Utils?.pickLatest) ? window.Utils.pickLatest(arr) : (arr && arr[0]) || null;
       }
 
-      if(!target && typeof window.QuoteService.createFromRepair === 'function'){
-        target = await window.QuoteService.createFromRepair(this.currentRepair);
+      if(!target && typeof window._svc('QuoteService').createFromRepair === 'function'){
+        target = await window._svc('QuoteService').createFromRepair(this.currentRepair);
       }
     }
   }catch(e){
@@ -4543,18 +4762,18 @@ static openDetail(repairId) {
 
   let target = null;
   try{
-    if(window.OrderService){
-      if(typeof window.OrderService.getLatestForRepair === 'function'){
-        target = window.OrderService.getLatestForRepair(rid);
-      }else if(typeof window.OrderService.getSummaryForRepair === 'function'){
-        target = window.OrderService.getSummaryForRepair(rid)?.latest || null;
-      }else if(typeof window.OrderService.getForRepair === 'function'){
-        const arr = await window.OrderService.getForRepair(rid);
+    if(window._svc('OrderService')){
+      if(typeof window._svc('OrderService').getLatestForRepair === 'function'){
+        target = window._svc('OrderService').getLatestForRepair(rid);
+      }else if(typeof window._svc('OrderService').getSummaryForRepair === 'function'){
+        target = window._svc('OrderService').getSummaryForRepair(rid)?.latest || null;
+      }else if(typeof window._svc('OrderService').getForRepair === 'function'){
+        const arr = await window._svc('OrderService').getForRepair(rid);
         target = (window.Utils?.pickLatest) ? window.Utils.pickLatest(arr) : (arr && arr[0]) || null;
       }
 
-      if(!target && typeof window.OrderService.createFromRepair === 'function'){
-        target = await window.OrderService.createFromRepair(this.currentRepair);
+      if(!target && typeof window._svc('OrderService').createFromRepair === 'function'){
+        target = await window._svc('OrderService').createFromRepair(this.currentRepair);
       }
     }
   }catch(e){
@@ -4582,11 +4801,11 @@ static openDetail(repairId) {
 
       let src = null;
       try {
-        if (window.RepairService) {
-          if (typeof window.RepairService.get === 'function') src = window.RepairService.get(rid);
-          else if (typeof window.RepairService.getById === 'function') src = window.RepairService.getById(rid);
-          else if (typeof window.RepairService.getAll === 'function') {
-            const arr = window.RepairService.getAll();
+        if (window._svc('RepairService')) {
+          if (typeof window._svc('RepairService').get === 'function') src = window._svc('RepairService').get(rid);
+          else if (typeof window._svc('RepairService').getById === 'function') src = window._svc('RepairService').getById(rid);
+          else if (typeof window._svc('RepairService').getAll === 'function') {
+            const arr = window._svc('RepairService').getAll();
             if (Array.isArray(arr)) src = arr.find(x => x && x.id === rid);
           }
         }

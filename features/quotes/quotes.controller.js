@@ -19,11 +19,8 @@ class QuotesController {
     try {
       console.log('🧾 Initializing Quotes Module...');
 
-      if (window.QuoteService && !window.QuoteService.isInitialized) {
-        await window.QuoteService.init();
-      }
-      if (window.RepairPartsService && !window.RepairPartsService.isInitialized) {
-        await window.RepairPartsService.init();
+      if (window.AppRegistry && typeof window.AppRegistry.ensureReady === 'function') {
+        await window.AppRegistry.ensureReady(['QuoteService', 'RepairPartsService'], { loadAll: false });
       }
 
       window.quotesUI.render(containerId);

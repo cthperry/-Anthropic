@@ -57,4 +57,4 @@
 - 簽名檔：可編輯（寄送週報時自動帶入）
 
 ## Firebase Database Rules
-- firebase_database.rules.json（本版採用 **UID 命名空間**：資料僅讀寫 `data/<uid>/...`，並封鎖根節點舊路徑；管理面僅保留 `users / usersByEmail` 管理用途）
+- database.rules.json（本版採用 **UID 命名空間**：資料僅讀寫 `data/<uid>/...`，並封鎖根節點舊路徑；管理面僅保留 `users / usersByEmail` 管理用途）

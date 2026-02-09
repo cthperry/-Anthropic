@@ -38,6 +38,11 @@ class PartsUI {
     this._querySig = '';
   }
 
+  // Phase 1：統一 Service 存取走 _svc（registry-first），避免直接 window.XxxService
+  _svc(name) {
+    try { return (typeof window._svc === 'function') ? window._svc(name) : null; } catch (_) { return null; }
+  }
+
   _getFiltersOpenStorageKey(view = '') {
     const v = (view || this.view || 'tracker').toString().trim() || 'tracker';
     const prefix = (window.AppConfig && window.AppConfig.system && window.AppConfig.system.storage && window.AppConfig.system.storage.prefix)
@@ -276,13 +281,22 @@ class PartsUI {
   }
 
   async update() {
-    // 確保 service ready
+    // Phase 1：集中化 service ready
     try {
-      if (window.PartService && !window.PartService.isInitialized) await window.PartService.init();
-      if (window.RepairPartsService && !window.RepairPartsService.isInitialized) await window.RepairPartsService.init();
+      if (window.AppRegistry && typeof window.AppRegistry.ensureReady === 'function') {
+        await window.AppRegistry.ensureReady(['PartService', 'RepairPartsService'], { loadAll: false });
+      } else {
+        const PartService = this._svc('PartService');
+        const RepairPartsService = this._svc('RepairPartsService');
+        if (PartService && !PartService.isInitialized) await PartService.init();
+        if (RepairPartsService && !RepairPartsService.isInitialized) await RepairPartsService.init();
+      }
     } catch (e) {
-      console.warn('PartsUI init service failed:', e);
+      console.warn('PartsUI ensureReady failed:', e);
     }
+
+    const PartService = this._svc('PartService');
+    const RepairPartsService = this._svc('RepairPartsService');
 
     this._applyViewButtons();
 
@@ -296,19 +310,19 @@ class PartsUI {
 
     const subtitle = document.getElementById('parts-subtitle');
     if (subtitle) {
-      const itemsCount = window.RepairPartsService ? window.RepairPartsService.getAllItems().length : 0;
+      const itemsCount = RepairPartsService ? RepairPartsService.getAllItems().length : 0;
       const caseCount = (() => {
         try {
-          if (!window.RepairPartsService) return 0;
-          const byRepair = window.RepairPartsService.byRepair || {};
+          if (!RepairPartsService) return 0;
+          const byRepair = RepairPartsService.byRepair || {};
           return Object.keys(byRepair).filter(rid => {
-            try { return (window.RepairPartsService.getForRepair(rid) || []).length > 0; } catch (_) { return false; }
+            try { return (RepairPartsService.getForRepair(rid) || []).length > 0; } catch (_) { return false; }
           }).length;
         } catch (_) {
           return 0;
         }
       })();
-      const allParts = window.PartService ? window.PartService.getAll() : [];
+      const allParts = PartService ? PartService.getAll() : [];
       const activeParts = (allParts || []).filter(p => p && p.isActive !== false);
       const inactive = Math.max(0, (allParts || []).length - activeParts.length);
       subtitle.textContent = `用料 ${itemsCount} 筆（${caseCount} 案例） · 主檔 ${activeParts.length} 筆（停用 ${inactive}）`;
@@ -327,9 +341,11 @@ class PartsUI {
     const cases = this._getTrackerCaseRows();
     if (!q) return cases;
 
+    const RepairService = this._svc('RepairService');
+
     return (cases || []).filter(c => {
       const rid = (c?.repairId || '').toString();
-      const repair = (window.RepairService && typeof window.RepairService.get === 'function') ? window.RepairService.get(rid) : null;
+      const repair = (RepairService && typeof RepairService.get === 'function') ? RepairService.get(rid) : null;
       const repairNo = (repair?.repairNo || rid || '').toString();
       const customer = (repair?.customer || '').toString();
       const machine = (repair?.machine || '').toString();
@@ -341,16 +357,17 @@ class PartsUI {
   }
 
   _getTrackerCaseRows() {
-    if (!window.RepairPartsService) return [];
+    const RepairPartsService = this._svc('RepairPartsService');
+    if (!RepairPartsService) return [];
 
-    const byRepair = window.RepairPartsService.byRepair || {};
+    const byRepair = RepairPartsService.byRepair || {};
     const rids = this.contextRepairId
       ? [this.contextRepairId]
       : Object.keys(byRepair);
 
     const out = [];
     for (const rid of rids) {
-      const items = window.RepairPartsService.getForRepair(rid);
+      const items = RepairPartsService.getForRepair(rid);
       if (!items || !items.length) continue;
       out.push(this._buildTrackerCaseRow(rid, items));
     }
@@ -459,7 +476,8 @@ class PartsUI {
 
   _getCatalogBaseRows() {
     const q = (this.searchText || '').toString().trim().toLowerCase();
-    const rows = window.PartService ? window.PartService.getAll() : [];
+    const PartService = this._svc('PartService');
+    const rows = PartService ? PartService.getAll() : [];
     if (!q) return rows;
     return (rows || []).filter(p => {
       const hay = `${p.name || ''} ${p.mpn || ''} ${p.vendor || ''}`.toLowerCase();
@@ -645,8 +663,9 @@ class PartsUI {
   }
 
   _renderRepairFilterOptions() {
-    const repairs = (window.RepairService && typeof window.RepairService.getAll === 'function')
-      ? window.RepairService.getAll().filter(r => r && !r.isDeleted)
+    const RepairService = this._svc('RepairService');
+    const repairs = (RepairService && typeof RepairService.getAll === 'function')
+      ? RepairService.getAll().filter(r => r && !r.isDeleted)
       : [];
 
     const options = [`<option value="" ${this.contextRepairId ? '' : 'selected'}>全部</option>`];
@@ -801,7 +820,8 @@ class PartsUI {
 
   _renderTrackerCard(c) {
     const rid = (c?.repairId || '').toString().trim();
-    const repair = (window.RepairService && typeof window.RepairService.get === 'function') ? window.RepairService.get(rid) : null;
+    const RepairService = this._svc('RepairService');
+    const repair = RepairService?.get?.(rid) || null;
     const repairNo = (repair?.repairNo || rid || '').toString();
     const customer = (repair?.customer || '').toString();
     const machine = (repair?.machine || '').toString();
@@ -1049,8 +1069,9 @@ class PartsUI {
   // tracker：批次新增/編輯（同一維修單可多筆）
   _renderRepairPartsBatchModal(repairId = '', focusItemId = '') {
     const escape = (x) => this._escapeAttr(x || '');
-    const repairs = (window.RepairService && typeof window.RepairService.getAll === 'function')
-      ? window.RepairService.getAll().filter(r => r && !r.isDeleted)
+    const RepairService = this._svc('RepairService');
+    const repairs = (RepairService && typeof RepairService.getAll === 'function')
+      ? RepairService.getAll().filter(r => r && !r.isDeleted)
       : [];
 
     const rid = (repairId || this.contextRepairId || '').toString().trim();
@@ -1179,8 +1200,9 @@ class PartsUI {
     this._batchState = this._batchState || { repairId: '', deletedIds: [] };
     this._batchState.repairId = rid;
 
-    const items = (window.RepairPartsService && typeof window.RepairPartsService.getForRepair === 'function' && rid)
-      ? window.RepairPartsService.getForRepair(rid)
+    const RepairPartsService = this._svc('RepairPartsService');
+    const items = (RepairPartsService && typeof RepairPartsService.getForRepair === 'function' && rid)
+      ? RepairPartsService.getForRepair(rid)
       : [];
 
     const focus = (focusItemId || '').toString().trim();
@@ -1254,8 +1276,9 @@ class PartsUI {
     const escape = (x) => this._escapeAttr(x || '');
 
     // repair select
-    const repairs = (window.RepairService && typeof window.RepairService.getAll === 'function')
-      ? window.RepairService.getAll().filter(r => r && !r.isDeleted)
+    const RepairService = this._svc('RepairService');
+    const repairs = (RepairService && typeof RepairService.getAll === 'function')
+      ? RepairService.getAll().filter(r => r && !r.isDeleted)
       : [];
     const repairOptions = repairs.slice(0, 400).map(r => {
       const label = `${r.repairNo || r.id} · ${(r.customer || '').toString()} · ${(r.machine || '').toString()}`;
@@ -1602,16 +1625,18 @@ Object.assign(PartsUI, {
     }
 
     try {
+      const RepairPartsService = ui?._svc?.('RepairPartsService') || (typeof window._svc === 'function' ? window._svc('RepairPartsService') : null);
+
       // delete first
       const deleted = (ui._batchState?.deletedIds || []).slice();
       for (const id of deleted) {
-        try { await window.RepairPartsService.remove(rid, id); } catch (_) {}
+        try { await RepairPartsService?.remove?.(rid, id); } catch (_) {}
       }
 
       // upsert
       for (const p of payloads) {
-        if (p.isExisting && p.id) await window.RepairPartsService.update(rid, p.id, p.data);
-        else await window.RepairPartsService.add(rid, p.data);
+        if (p.isExisting && p.id) await RepairPartsService?.update?.(rid, p.id, p.data);
+        else await RepairPartsService?.add?.(rid, p.data);
       }
 
       PartsUI.closeModal();
@@ -1654,7 +1679,9 @@ Object.assign(PartsUI, {
 
     try {
       if (kind === 'catalog') {
-        await window.PartService.upsert({
+        const PartService = window.partsUI?._svc?.('PartService') || (typeof window._svc === 'function' ? window._svc('PartService') : null);
+        if (!PartService || typeof PartService.upsert !== 'function') throw new Error('PartService.upsert 未就緒');
+        await PartService.upsert({
           id: (data.id || '').trim(),
           name: (data.name || '').trim(),
           mpn: (data.mpn || '').trim(),
@@ -1681,12 +1708,14 @@ Object.assign(PartsUI, {
         const rid = (data.repairId || '').trim();
         if (!rid) throw new Error('請選擇維修單');
 
+        const RepairPartsService = window.partsUI?._svc?.('RepairPartsService') || (typeof window._svc === 'function' ? window._svc('RepairPartsService') : null);
+
         // id 存在：視為 update
-        if (payload.id && window.RepairPartsService.getForRepair(rid).some(x => x.id === payload.id)) {
-          await window.RepairPartsService.update(rid, payload.id, payload);
+        if (payload.id && RepairPartsService?.getForRepair?.(rid)?.some(x => x.id === payload.id)) {
+          await RepairPartsService?.update?.(rid, payload.id, payload);
         } else {
           delete payload.id;
-          await window.RepairPartsService.add(rid, payload);
+          await RepairPartsService?.add?.(rid, payload);
         }
       }
 
@@ -1701,7 +1730,8 @@ Object.assign(PartsUI, {
   },
 
   openEditPart(partId) {
-    const p = window.PartService.get(partId);
+    const PartService = window.partsUI?._svc?.('PartService') || (typeof window._svc === 'function' ? window._svc('PartService') : null);
+    const p = PartService?.get?.(partId);
     if (!p) return;
     window.partsUI.view = 'catalog';
     window.partsUI.openModal(`
@@ -1726,7 +1756,9 @@ Object.assign(PartsUI, {
         : confirm(msg);
       if (!ok) return;
     }
-    await window.PartService.deactivate(partId);
+    const PartService = window.partsUI?._svc?.('PartService') || (typeof window._svc === 'function' ? window._svc('PartService') : null);
+    if (!PartService || typeof PartService.deactivate !== 'function') throw new Error('PartService.deactivate 未就緒');
+    await PartService.deactivate(partId);
     await window.partsUI.update();
   },
 
@@ -1743,10 +1775,9 @@ Object.assign(PartsUI, {
         : confirm(msg);
       if (!ok) return;
     }
-    if (!window.RepairPartsService || typeof window.RepairPartsService.removeAllForRepair !== 'function') {
-      throw new Error('RepairPartsService.removeAllForRepair 未就緒');
-    }
-    await window.RepairPartsService.removeAllForRepair(repairId);
+    const RepairPartsService = window.partsUI?._svc?.('RepairPartsService') || (typeof window._svc === 'function' ? window._svc('RepairPartsService') : null);
+    if (!RepairPartsService || typeof RepairPartsService.removeAllForRepair !== 'function') throw new Error('RepairPartsService.removeAllForRepair 未就緒');
+    await RepairPartsService.removeAllForRepair(repairId);
     await window.partsUI.update();
   },
 
@@ -1758,20 +1789,24 @@ Object.assign(PartsUI, {
         : confirm(msg);
       if (!ok) return;
     }
-    await window.RepairPartsService.remove(repairId, itemId);
+    const RepairPartsService = window.partsUI?._svc?.('RepairPartsService') || (typeof window._svc === 'function' ? window._svc('RepairPartsService') : null);
+    if (!RepairPartsService || typeof RepairPartsService.remove !== 'function') throw new Error('RepairPartsService.remove 未就緒');
+    await RepairPartsService.remove(repairId, itemId);
     await window.partsUI.update();
   },
 
   async changeStatus(repairId, itemId, event) {
     const status = (event?.target?.value || '').trim();
     const patch = { status };
-    if (status === '已到貨' && !window.RepairPartsService.getForRepair(repairId).find(x => x.id === itemId)?.arrivedDate) {
+    const RepairPartsService = window.partsUI?._svc?.('RepairPartsService') || (typeof window._svc === 'function' ? window._svc('RepairPartsService') : null);
+    if (status === '已到貨' && !RepairPartsService?.getForRepair?.(repairId)?.find(x => x.id === itemId)?.arrivedDate) {
       patch.arrivedDate = new Date().toISOString().slice(0, 10);
     }
-    if (status === '已更換' && !window.RepairPartsService.getForRepair(repairId).find(x => x.id === itemId)?.replacedDate) {
+    if (status === '已更換' && !RepairPartsService?.getForRepair?.(repairId)?.find(x => x.id === itemId)?.replacedDate) {
       patch.replacedDate = new Date().toISOString().slice(0, 10);
     }
-    await window.RepairPartsService.update(repairId, itemId, patch);
+    if (!RepairPartsService || typeof RepairPartsService.update !== 'function') throw new Error('RepairPartsService.update 未就緒');
+    await RepairPartsService.update(repairId, itemId, patch);
     await window.partsUI.update();
   },
   async openRepair(repairId) {

@@ -12,8 +12,8 @@ class KBController {
     if (this.isInitialized) return;
 
     try {
-      if (window.KBService && !window.KBService.isInitialized) {
-        await window.KBService.init();
+      if (window.AppRegistry && typeof window.AppRegistry.ensureReady === 'function') {
+        await window.AppRegistry.ensureReady(['KBService'], { loadAll: false });
       }
 
       // render UI

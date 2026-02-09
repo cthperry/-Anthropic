@@ -115,9 +115,20 @@
     const key = `${name}::ready`;
     if (_readyFlags[key]) return true;
 
+    // Phase 1：統一走 AppRegistry.ensureReady（集中化 init/loadAll）
+    try {
+      if (window.AppRegistry && typeof window.AppRegistry.ensureReady === 'function') {
+        await window.AppRegistry.ensureReady(name, opts);
+        _readyFlags[key] = true;
+        return true;
+      }
+    } catch (e) {
+      // 若 registry 失敗，繼續走 fallback（但仍禁止使用 window[name]）
+    }
+
     const svc = (typeof window._svc === 'function')
       ? window._svc(name)
-      : window[name];
+      : ((window.AppRegistry && typeof window.AppRegistry.get === 'function') ? window.AppRegistry.get(name) : null);
 
     if (!svc) return false;
 

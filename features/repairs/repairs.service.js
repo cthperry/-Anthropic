@@ -681,10 +681,15 @@ _computeChangedFields(before, after) {
         toProgress: repair.progress
       });
       
-      // 同步客戶資料（若已載入客戶模組）
+      // 同步客戶資料（Phase 1：registry-first；避免直接 window.*Service）
       try {
-        if (window.CustomerService && typeof window.CustomerService.touchFromRepair === 'function') {
-          await window.CustomerService.touchFromRepair(repair, { mode: "create" });
+        const reg = (typeof window !== 'undefined' && window.AppRegistry) ? window.AppRegistry : null;
+        const CustomerService = (reg && typeof reg.get === 'function')
+          ? reg.get('CustomerService')
+          : (typeof window._svc === 'function' ? window._svc('CustomerService') : null);
+
+        if (CustomerService && typeof CustomerService.touchFromRepair === 'function') {
+          await CustomerService.touchFromRepair(repair, { mode: 'create' });
         }
       } catch (e) {
         console.warn('Customer sync skipped:', e);
@@ -764,10 +769,15 @@ _computeChangedFields(before, after) {
       // 通知監聽器
       this.notifyListeners('updated', updated);
 
-      // 同步客戶資料（若已載入客戶模組）
+      // 同步客戶資料（Phase 1：registry-first；避免直接 window.*Service）
       try {
-        if (window.CustomerService && typeof window.CustomerService.touchFromRepair === 'function') {
-          await window.CustomerService.touchFromRepair(updated, { mode: "update" });
+        const reg = (typeof window !== 'undefined' && window.AppRegistry) ? window.AppRegistry : null;
+        const CustomerService = (reg && typeof reg.get === 'function')
+          ? reg.get('CustomerService')
+          : (typeof window._svc === 'function' ? window._svc('CustomerService') : null);
+
+        if (CustomerService && typeof CustomerService.touchFromRepair === 'function') {
+          await CustomerService.touchFromRepair(updated, { mode: 'update' });
         }
       } catch (e) {
         console.warn('Customer sync skipped:', e);
@@ -1202,7 +1212,7 @@ const repairService = new RepairService();
 
 // 輸出到全域
 if (typeof window !== 'undefined') {
-  window.RepairService = repairService;
+
   try { window.AppRegistry?.register?.('RepairService', repairService); } catch (_) {}
 }
 

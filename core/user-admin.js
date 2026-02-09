@@ -443,6 +443,7 @@
     }
   }
 
-  window.UserAdminService = new UserAdminService();
+  const userAdminSvc = new UserAdminService();
+  try { window.AppRegistry?.register?.('UserAdminService', userAdminSvc); } catch (_) {}
   console.log('✅ UserAdminService loaded');
 })();

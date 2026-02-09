@@ -170,11 +170,11 @@ class OrdersUI {
           </div>
           <div class="module-toolbar-right">
             <div class="orders-search">
-              <input id="orders-search" class="input" type="text" placeholder="搜尋：訂單號 / 客戶 / 供應商 / 狀態" value="${this._escapeAttr(this.searchDraft)}" oninput="OrdersUI.onSearchDraft(event)" onkeydown="OrdersUI.onSearchKeydown(event)" />
+              <input id="orders-search" class="input" type="text" placeholder="搜尋：訂單號 / 客戶 / 供應商 / 狀態" value="${this._escapeAttr(this.searchDraft)}" />
             </div>
-            <button class="btn primary" onclick="OrdersUI.applyAll()">搜尋</button>
-            <button class="btn" onclick="OrdersUI.clearAll()">清除</button>
-            <button class="btn primary" onclick="OrdersUI.openCreateFromQuote()">從報價建立</button>
+            <button class="btn primary" data-action="orders.applyAll">搜尋</button>
+            <button class="btn" data-action="orders.clearAll">清除</button>
+            <button class="btn primary" data-action="orders.openCreateFromQuote">從報價建立</button>
           </div>
         </div>
 
@@ -184,7 +184,7 @@ class OrdersUI {
       </div>
 
       <div id="orders-modal" class="modal" style="display:none;">
-        <div class="modal-backdrop" onclick="OrdersUI.closeModal()"></div>
+        <div class="modal-backdrop" data-action="orders.closeModal"></div>
         <!--
           注意：Orders 明細需要更寬的視窗與橫向捲動表格。
           這裡避免使用 .modal-content（預設寬度較窄），改由內層 .modal-dialog / .modal-xlarge 控制寬度。
@@ -258,13 +258,14 @@ class OrdersUI {
 
   async update() {
     try {
-      if ((window._svc ? window._svc('OrderService') : window.OrderService) && !(window._svc ? window._svc('OrderService') : window.OrderService).isInitialized) await (window._svc ? window._svc('OrderService') : window.OrderService).init();
-      if ((window._svc ? window._svc('QuoteService') : window.QuoteService) && !(window._svc ? window._svc('QuoteService') : window.QuoteService).isInitialized) await (window._svc ? window._svc('QuoteService') : window.QuoteService).init();
+      // Phase 1：集中化 service ready（只允許 AppRegistry.ensureReady）
+      await window.AppRegistry.ensureReady(['OrderService', 'QuoteService'], { loadAll: false });
     } catch (e) {
       console.warn('OrdersUI init service failed:', e);
     }
 
-    const baseRows = (window._svc ? window._svc('OrderService') : window.OrderService) ? (window._svc ? window._svc('OrderService') : window.OrderService).search(this.searchText) : [];
+    const OrderService = window._svc('OrderService');
+    const baseRows = (OrderService && typeof OrderService.search === 'function') ? OrderService.search(this.searchText) : [];
     const subtitle = document.getElementById('orders-subtitle');
     if (subtitle) subtitle.textContent = `共 ${baseRows.length} 筆`;
 
@@ -299,27 +300,27 @@ class OrdersUI {
 
     host.innerHTML = `
       <div class="stats-grid orders-stats">
-        <div class="stat-card clickable" onclick="OrdersUI.setQuickFilter('')" title="顯示全部">
+        <div class="stat-card clickable" data-action="orders.setQuickFilter" data-value="" title="顯示全部">
           <div class="stat-value">${rows.length}</div>
           <div class="stat-label">全部</div>
         </div>
-        <div class="stat-card clickable" style="--accent:#7c3aed;" onclick="OrdersUI.setQuickFilter('OPEN')" title="未結案/未取消">
+        <div class="stat-card clickable" style="--accent:#7c3aed;" data-action="orders.setQuickFilter" data-value="OPEN" title="未結案/未取消">
           <div class="stat-value">${openCount}</div>
           <div class="stat-label">待處理</div>
         </div>
-        <div class="stat-card clickable" style="--accent:#0ea5e9;" onclick="OrdersUI.setQuickFilter('已下單')">
+        <div class="stat-card clickable" style="--accent:#0ea5e9;" data-action="orders.setQuickFilter" data-value="已下單">
           <div class="stat-value">${countBy('已下單')}</div>
           <div class="stat-label">已下單</div>
         </div>
-        <div class="stat-card clickable" style="--accent:#d97706;" onclick="OrdersUI.setQuickFilter('已到貨')">
+        <div class="stat-card clickable" style="--accent:#d97706;" data-action="orders.setQuickFilter" data-value="已到貨">
           <div class="stat-value">${countBy('已到貨')}</div>
           <div class="stat-label">已到貨</div>
         </div>
-        <div class="stat-card clickable" style="--accent:#16a34a;" onclick="OrdersUI.setQuickFilter('已結案')">
+        <div class="stat-card clickable" style="--accent:#16a34a;" data-action="orders.setQuickFilter" data-value="已結案">
           <div class="stat-value">${countBy('已結案')}</div>
           <div class="stat-label">已結案</div>
         </div>
-        <div class="stat-card clickable" style="--accent:#b45309;" onclick="OrdersUI.setQuickFilter('OVERDUE')" title="預計到貨日早於今日且未到貨">
+        <div class="stat-card clickable" style="--accent:#b45309;" data-action="orders.setQuickFilter" data-value="OVERDUE" title="預計到貨日早於今日且未到貨">
           <div class="stat-value">${overdueCount}</div>
           <div class="stat-label">逾期</div>
         </div>
@@ -344,20 +345,20 @@ class OrdersUI {
       <div class="orders-filters-inner">
         <div class="orders-filters-top">
           <div class="chip-row" aria-label="快速篩選">
-            <button class="chip ${(!this.filterStatus && !this.filterOverdue && !this.filterOpenOnly) ? 'active' : ''}" onclick="OrdersUI.setQuickFilter('')">全部</button>
+            <button class="chip ${(!this.filterStatus && !this.filterOverdue && !this.filterOpenOnly) ? 'active' : ''}" data-action="orders.setQuickFilter" data-value="">全部</button>
             ${statuses.map(v => {
               const active = ((this.filterStatusDraft || this.filterStatus) === v && !this.filterOverdue && !this.filterOpenOnly);
               const c = this._accentForStatus(v).accent;
-              return `<button class="chip ${active ? 'active' : ''}" style="--chip-color:${this._escapeAttr(c)}" onclick="OrdersUI.setQuickFilter('${this._escapeAttr(v)}')">${this._escapeHtml(v)}</button>`;
+              return `<button class="chip ${active ? 'active' : ''}" style="--chip-color:${this._escapeAttr(c)}" data-action="orders.setQuickFilter" data-value="${this._escapeAttr(v)}">${this._escapeHtml(v)}</button>`;
             }).join('')}
-            <button class="chip ${this.filterOpenOnly ? 'active' : ''}" style="--chip-color:#7c3aed" onclick="OrdersUI.setQuickFilter('OPEN')">待處理</button>
-            <button class="chip ${this.filterOverdue ? 'active' : ''}" style="--chip-color:#b45309" onclick="OrdersUI.setQuickFilter('OVERDUE')">逾期</button>
+            <button class="chip ${this.filterOpenOnly ? 'active' : ''}" style="--chip-color:#7c3aed" data-action="orders.setQuickFilter" data-value="OPEN">待處理</button>
+            <button class="chip ${this.filterOverdue ? 'active' : ''}" style="--chip-color:#b45309" data-action="orders.setQuickFilter" data-value="OVERDUE">逾期</button>
           </div>
 
           <div class="orders-filters-actions" aria-label="篩選操作">
-            <button class="btn sm primary" onclick="OrdersUI.applyAll()">搜尋</button>
-            <button class="btn sm ghost" onclick="OrdersUI.clearAll()" title="清除所有條件">清除</button>
-            <button class="btn sm" onclick="OrdersUI.toggleAdvancedFilters()">${this.filtersOpen ? '收合' : '展開'} 篩選</button>
+            <button class="btn sm primary" data-action="orders.applyAll">搜尋</button>
+            <button class="btn sm ghost" data-action="orders.clearAll" title="清除所有條件">清除</button>
+            <button class="btn sm" data-action="orders.toggleAdvancedFilters">${this.filtersOpen ? '收合' : '展開'} 篩選</button>
             
           </div>
         </div>
@@ -366,7 +367,7 @@ class OrdersUI {
           <div class="filter-row">
             <div class="filter-group">
               <label class="form-label">狀態（詳細）</label>
-              <select class="input" id="orders-filter-status" onchange="OrdersUI.setStatusDraft(event)">
+              <select class="input" id="orders-filter-status">
                 <option value="" ${this.filterStatus ? '' : 'selected'}>全部</option>
                 ${statuses.map(v => `<option value="${this._escapeAttr(v)}" ${(this.filterStatusDraft || this.filterStatus) === v ? 'selected' : ''}>${this._escapeHtml(v)}</option>`).join('')}
               </select>
@@ -374,7 +375,7 @@ class OrdersUI {
 
             <div class="filter-group">
               <label class="form-label">排序</label>
-              <select class="input" id="orders-filter-sort" onchange="OrdersUI.setSortDraft(event)">
+              <select class="input" id="orders-filter-sort">
                 <option value="updatedAt_desc" ${(this.sortKeyDraft || this.sortKey) === 'updatedAt_desc' ? 'selected' : ''}>最近更新</option>
                 <option value="orderedAt_desc" ${(this.sortKeyDraft || this.sortKey) === 'orderedAt_desc' ? 'selected' : ''}>下單日（新→舊）</option>
                 <option value="expectedAt_asc" ${(this.sortKeyDraft || this.sortKey) === 'expectedAt_asc' ? 'selected' : ''}>預計到貨（近→遠）</option>
@@ -387,18 +388,18 @@ class OrdersUI {
             <div class="filter-group" style="min-width:260px;">
               <label class="form-label">下單日期範圍</label>
               <div class="date-range-row">
-                <input type="date" class="input" id="orders-filter-ordered-from" value="${orderedFrom}" onchange="OrdersUI.onAdvancedDraftChange()" />
+                <input type="date" class="input" id="orders-filter-ordered-from" value="${orderedFrom}" />
                 <span class="date-range-sep">至</span>
-                <input type="date" class="input" id="orders-filter-ordered-to" value="${orderedTo}" onchange="OrdersUI.onAdvancedDraftChange()" />
+                <input type="date" class="input" id="orders-filter-ordered-to" value="${orderedTo}" />
               </div>
             </div>
 
             <div class="filter-group" style="min-width:260px;">
               <label class="form-label">預計到貨範圍</label>
               <div class="date-range-row">
-                <input type="date" class="input" id="orders-filter-expected-from" value="${expectedFrom}" onchange="OrdersUI.onAdvancedDraftChange()" />
+                <input type="date" class="input" id="orders-filter-expected-from" value="${expectedFrom}" />
                 <span class="date-range-sep">至</span>
-                <input type="date" class="input" id="orders-filter-expected-to" value="${expectedTo}" onchange="OrdersUI.onAdvancedDraftChange()" />
+                <input type="date" class="input" id="orders-filter-expected-to" value="${expectedTo}" />
               </div>
             </div>
           </div>
@@ -407,15 +408,15 @@ class OrdersUI {
             <div class="filter-group" style="min-width:260px;">
               <label class="form-label">金額範圍</label>
               <div class="date-range-row">
-                <input type="number" inputmode="numeric" class="input" id="orders-filter-amount-min" placeholder="最低" value="${minAmt}" onchange="OrdersUI.onAdvancedDraftChange()" />
+                <input type="number" inputmode="numeric" class="input" id="orders-filter-amount-min" placeholder="最低" value="${minAmt}" />
                 <span class="date-range-sep">~</span>
-                <input type="number" inputmode="numeric" class="input" id="orders-filter-amount-max" placeholder="最高" value="${maxAmt}" onchange="OrdersUI.onAdvancedDraftChange()" />
+                <input type="number" inputmode="numeric" class="input" id="orders-filter-amount-max" placeholder="最高" value="${maxAmt}" />
               </div>
             </div>
 
             <div class="filter-group" style="min-width:220px;">
               <label class="form-label">供應商</label>
-              <input type="text" class="input" id="orders-filter-supplier" placeholder="包含關鍵字" value="${supplier}" oninput="OrdersUI.onAdvancedDraftChange()" />
+              <input type="text" class="input" id="orders-filter-supplier" placeholder="包含關鍵字" value="${supplier}" />
             </div>
           </div>
 
@@ -528,7 +529,7 @@ class OrdersUI {
 
   renderOrderCard(o, today) {
     const safeId = this._escapeAttr(o.id);
-    const repair = (window._svc ? window._svc('RepairService') : window.RepairService)?.get?.(o.repairId) || null;
+    const repair = window._svc('RepairService')?.get?.(o.repairId) || null;
     const repairNo = repair ? (repair.repairNo || repair.id || '') : (o.repairId ? o.repairId : '');
     const machine = repair ? (repair.machine || '') : '';
     const supplier = (o.supplier || '').toString().trim();
@@ -560,8 +561,8 @@ class OrdersUI {
         </div>
 
         <div class="card-foot">
-          <button class="btn sm primary" onclick="OrdersUI.openDetail('${safeId}')">開啟明細</button>
-          <button class="btn sm danger" onclick="OrdersUI.confirmRemove('${safeId}')">刪除</button>
+          <button class="btn sm primary" data-action="orders.openDetail" data-id="${safeId}">開啟明細</button>
+          <button class="btn sm danger" data-action="orders.confirmRemove" data-id="${safeId}">刪除</button>
         </div>
       </div>
     `;
@@ -641,7 +642,7 @@ class OrdersUI {
       <div class="orders-list-footer">
         <div class="muted">已顯示 <span class="mono">${visible.length}</span> / <span class="mono">${total}</span></div>
         <div class="orders-list-footer-actions">
-          ${hasMore ? `<button class="btn" onclick="OrdersUI.loadMore()">顯示更多</button>` : `<span class="muted">已顯示全部</span>`}
+          ${hasMore ? `<button class="btn" data-action="orders.loadMore">顯示更多</button>` : `<span class="muted">已顯示全部</span>`}
         </div>
       </div>
     `;
@@ -709,7 +710,7 @@ class OrdersUI {
 
   _rerenderDetailModal(orderId, { preserveScroll = true } = {}) {
     const id = (orderId || '').toString().trim();
-    const o = (window._svc ? window._svc('OrderService') : window.OrderService)?.get?.(id);
+    const o = window._svc('OrderService')?.get?.(id);
     if (!o) return;
 
     const modal = document.getElementById('orders-modal');
@@ -739,7 +740,7 @@ class OrdersUI {
     const form = document.getElementById(`order-detail-form-${id}`);
     if (!form) return (this._draftItems && this._draftItems[id]) ? this._draftItems[id] : [];
 
-    const o = (window._svc ? window._svc('OrderService') : window.OrderService)?.get?.(id);
+    const o = window._svc('OrderService')?.get?.(id);
     const baseItems = o?.items || [];
     this._setActiveOrder(id, baseItems);
     const list = this._ensureDraftItems(id, baseItems);
@@ -776,7 +777,7 @@ class OrdersUI {
     const idx = Number(index);
     if (!id || !Number.isFinite(idx) || idx < 0) return;
 
-    const o = (window._svc ? window._svc('OrderService') : window.OrderService)?.get?.(id);
+    const o = window._svc('OrderService')?.get?.(id);
     const baseItems = o?.items || [];
     this._setActiveOrder(id, baseItems);
     const list = this._ensureDraftItems(id, baseItems);
@@ -800,7 +801,7 @@ class OrdersUI {
   addItem(orderId) {
     const id = (orderId || '').toString().trim();
     if (!id) return;
-    const o = (window._svc ? window._svc('OrderService') : window.OrderService)?.get?.(id);
+    const o = window._svc('OrderService')?.get?.(id);
     if (!o) return;
 
     const ui = window.ordersUI;
@@ -824,7 +825,7 @@ class OrdersUI {
     const id = (orderId || '').toString().trim();
     const idx = Number(index);
     if (!id || !Number.isFinite(idx)) return;
-    const o = (window._svc ? window._svc('OrderService') : window.OrderService)?.get?.(id);
+    const o = window._svc('OrderService')?.get?.(id);
     if (!o) return;
 
     const ui = window.ordersUI;
@@ -876,12 +877,12 @@ class OrdersUI {
   }
 
   _renderQuoteSelect(selectedQuoteId = '') {
-    const quotes = (window._svc ? window._svc('QuoteService') : window.QuoteService)?.getAll?.()?.filter(q => q && !q.isDeleted) || [];
+    const quotes = window._svc('QuoteService')?.getAll?.()?.filter(q => q && !q.isDeleted) || [];
     return `
       <select class="input" name="quoteId" required>
         <option value="">請選擇</option>
         ${quotes.slice(0, 400).map(q => {
-          const repair = (window._svc ? window._svc('RepairService') : window.RepairService)?.get?.(q.repairId) || null;
+          const repair = window._svc('RepairService')?.get?.(q.repairId) || null;
           const label = `${q.quoteNo || q.id} · ${(q.customer || '').toString()}${repair ? ' · ' + (repair.repairNo || repair.id) : ''}`;
           return `<option value="${this._escapeAttr(q.id)}" ${selectedQuoteId === q.id ? 'selected' : ''}>${this._escapeHtml(label)}</option>`;
         }).join('')}
@@ -894,9 +895,9 @@ class OrdersUI {
       <div class="modal-dialog">
         <div class="modal-header">
           <h3>從報價建立訂單</h3>
-          <button class="modal-close" onclick="OrdersUI.closeModal()">✕</button>
+          <button class="modal-close" data-action="orders.closeModal">✕</button>
         </div>
-        <form class="modal-body" onsubmit="OrdersUI.handleCreateFromQuote(event)">
+        <form class="modal-body" data-action="orders.handleCreateFromQuote">
           <div class="form-section">
             <h4 class="form-section-title">選擇報價</h4>
             <div class="form-group">
@@ -906,7 +907,7 @@ class OrdersUI {
             <p class="muted" style="margin:10px 0 0;">將自動帶入報價項目並更新用料追蹤狀態（已下單）。</p>
           </div>
           <div class="modal-footer">
-            <button class="btn" type="button" onclick="OrdersUI.closeModal()">取消</button>
+            <button class="btn" type="button" data-action="orders.closeModal">取消</button>
             <button class="btn primary" type="submit">建立</button>
           </div>
         </form>
@@ -919,7 +920,7 @@ class OrdersUI {
     const o = OrderModel.normalize(order);
     const statuses = (AppConfig?.business?.orderStatus || []).map(s => s.value);
 
-    const repair = (window._svc ? window._svc('RepairService') : window.RepairService)?.get?.(o.repairId) || null;
+    const repair = window._svc('RepairService')?.get?.(o.repairId) || null;
     const customer = (o.customer || repair?.customer || '').toString();
     const supplier = (o.supplier || '').toString();
     const machine = (repair?.machine || '').toString();
@@ -947,11 +948,11 @@ class OrdersUI {
           <div class="detail-header-right">
             <span class="badge ${this._badgeClassForOrderStatus(o.status)}">${this._escapeHtml(o.status || '')}</span>
             <span class="badge" id="orderHeaderTotal_${idSafe}">$ ${this._escapeHtml(draftTotal)} ${this._escapeHtml(o.currency || 'TWD')}</span>
-            <button class="modal-close" type="button" onclick="OrdersUI.closeModal()">✕</button>
+            <button class="modal-close" type="button" data-action="orders.closeModal">✕</button>
           </div>
         </div>
 
-        <form class="modal-body" id="order-detail-form-${idSafe}" onsubmit="OrdersUI.handleSaveOrder(event)">
+        <form class="modal-body" id="order-detail-form-${idSafe}" data-action="orders.handleSaveOrder">
           <input type="hidden" name="id" value="${this._escapeAttr(o.id)}" />
 
           <div class="form-section">
@@ -965,7 +966,7 @@ class OrdersUI {
               </div>
               <div class="form-group">
                 <label class="form-label">幣別</label>
-                <input class="input" name="currency" value="${this._escapeAttr(o.currency || 'TWD')}" oninput="OrdersUI.recalcTotals('${idSafe}')" />
+                <input class="input" name="currency" value="${this._escapeAttr(o.currency || 'TWD')}" data-action="orders.recalcTotals" data-id="${idSafe}" />
               </div>
               <div class="form-group">
                 <label class="form-label">供應商</label>
@@ -991,7 +992,7 @@ class OrdersUI {
               <h4 class="form-section-title">項目</h4>
               <div class="order-items-toolbar">
                 <div class="order-items-toolbar-left">
-                  <button class="btn sm" type="button" onclick="OrdersUI.addItem('${idSafe}')">＋ 新增零件</button>
+                  <button class="btn sm" type="button" data-action="orders.addItem" data-id="${idSafe}">＋ 新增零件</button>
                 </div>
                 <div class="muted">共 <span class="mono">${draftItems.length}</span> 筆</div>
               </div>
@@ -1023,28 +1024,28 @@ class OrdersUI {
                     return `
                       <tr>
                         <td>
-                          <input class="input order-text-input" name="name_${i}" value="${this._escapeAttr(it.name || '')}" placeholder="零件名稱 / 描述" oninput="OrdersUI.onItemInput('${idSafe}', ${i}, 'name', event)" />
+                          <input class="input order-text-input" name="name_${i}" value="${this._escapeAttr(it.name || '')}" placeholder="零件名稱 / 描述" data-action="orders.itemInput" data-id="${idSafe}" data-index="${i}" data-field="name" />
                         </td>
                         <td>
-                          <input class="input order-mpn-input" name="mpn_${i}" value="${this._escapeAttr(it.mpn || '')}" placeholder="MPN / P/N" oninput="OrdersUI.onItemInput('${idSafe}', ${i}, 'mpn', event)" />
+                          <input class="input order-mpn-input" name="mpn_${i}" value="${this._escapeAttr(it.mpn || '')}" placeholder="MPN / P/N" data-action="orders.itemInput" data-id="${idSafe}" data-index="${i}" data-field="mpn" />
                         </td>
                         <td>
-                          <input class="input order-vendor-input" name="vendor_${i}" value="${this._escapeAttr(it.vendor || '')}" placeholder="Vendor / 品牌" oninput="OrdersUI.onItemInput('${idSafe}', ${i}, 'vendor', event)" />
+                          <input class="input order-vendor-input" name="vendor_${i}" value="${this._escapeAttr(it.vendor || '')}" placeholder="Vendor / 品牌" data-action="orders.itemInput" data-id="${idSafe}" data-index="${i}" data-field="vendor" />
                         </td>
                         <td>
-                          <input class="input order-unit-input" name="unit_${i}" value="${this._escapeAttr(it.unit || 'pcs')}" placeholder="pcs" oninput="OrdersUI.onItemInput('${idSafe}', ${i}, 'unit', event)" />
+                          <input class="input order-unit-input" name="unit_${i}" value="${this._escapeAttr(it.unit || 'pcs')}" placeholder="pcs" data-action="orders.itemInput" data-id="${idSafe}" data-index="${i}" data-field="unit" />
                         </td>
                         <td class="right">
-                          <input class="input order-num-input" name="qty_${i}" value="${this._escapeAttr(qty)}" type="number" step="1" min="0" inputmode="numeric" oninput="OrdersUI.onItemInput('${idSafe}', ${i}, 'qty', event); OrdersUI.recalcTotals('${idSafe}')" />
+                          <input class="input order-num-input" name="qty_${i}" value="${this._escapeAttr(qty)}" type="number" step="1" min="0" inputmode="numeric" data-action="orders.itemInput" data-id="${idSafe}" data-index="${i}" data-field="qty" data-recalc="1" />
                         </td>
                         <td class="right">
-                          <input class="input order-money-input" name="unitPrice_${i}" value="${this._escapeAttr(unitPrice)}" type="number" step="1" min="0" inputmode="numeric" oninput="OrdersUI.onItemInput('${idSafe}', ${i}, 'unitPrice', event); OrdersUI.recalcTotals('${idSafe}')" />
+                          <input class="input order-money-input" name="unitPrice_${i}" value="${this._escapeAttr(unitPrice)}" type="number" step="1" min="0" inputmode="numeric" data-action="orders.itemInput" data-id="${idSafe}" data-index="${i}" data-field="unitPrice" data-recalc="1" />
                         </td>
                         <td class="right">
                           <span class="mono" id="orderLineTotal_${idSafe}_${i}">$ ${this._escapeHtml(lineTotal)} ${this._escapeHtml(o.currency || 'TWD')}</span>
                         </td>
                         <td class="center op-col">
-                          <button class="btn ghost sm order-remove-btn" type="button" onclick="OrdersUI.removeItem('${idSafe}', ${i})" title="移除">✕</button>
+                          <button class="btn ghost sm order-remove-btn" type="button" data-action="orders.removeItem" data-id="${idSafe}" data-index="${i}" title="移除">✕</button>
                         </td>
                       </tr>
                     `;
@@ -1053,7 +1054,7 @@ class OrdersUI {
                       <td colspan="8">
                         <div class="order-empty-inline">
                           <span>目前沒有項目</span>
-                          <button class="btn sm primary" type="button" onclick="OrdersUI.addItem('${idSafe}')">＋ 新增零件</button>
+                          <button class="btn sm primary" type="button" data-action="orders.addItem" data-id="${idSafe}">＋ 新增零件</button>
                         </div>
                       </td>
                     </tr>
@@ -1075,7 +1076,7 @@ class OrdersUI {
           </div>
 
           <div class="modal-footer sticky">
-            <button class="btn" type="button" onclick="OrdersUI.closeModal()">關閉</button>
+            <button class="btn" type="button" data-action="orders.closeModal">關閉</button>
             <button class="btn primary" type="submit">儲存</button>
           </div>
         </form>
@@ -1227,7 +1228,7 @@ Object.assign(OrdersUI, {
       return;
     }
     try {
-      const order = await (window._svc ? window._svc('OrderService') : window.OrderService).createFromQuote(qid);
+      const order = await window._svc('OrderService').createFromQuote(qid);
       window.ordersUI.closeModal();
       await window.ordersUI.update();
       OrdersUI.openDetail(order.id);
@@ -1240,7 +1241,7 @@ Object.assign(OrdersUI, {
   },
 
   openDetail(orderId) {
-    const o = (window._svc ? window._svc('OrderService') : window.OrderService).get(orderId);
+    const o = window._svc('OrderService').get(orderId);
     if (!o) return;
     try { window.ordersUI._setActiveOrder(o.id, o.items); } catch (_) {}
     window.ordersUI.openModal(window.ordersUI.renderDetailModal(o));
@@ -1252,7 +1253,7 @@ Object.assign(OrdersUI, {
     const form = event.target;
     const data = Object.fromEntries(new FormData(event.target).entries());
     const id = (data.id || '').trim();
-    const o = (window._svc ? window._svc('OrderService') : window.OrderService).get(id);
+    const o = window._svc('OrderService').get(id);
     if (!o) return;
 
     const countNum = Number(data.itemsCount ?? (o.items || []).length);
@@ -1314,7 +1315,7 @@ Object.assign(OrdersUI, {
     }
 
     try {
-      await (window._svc ? window._svc('OrderService') : window.OrderService).upsert({
+      await window._svc('OrderService').upsert({
         ...o,
         status: (data.status || o.status || '').toString(),
         currency: (data.currency || o.currency || 'TWD').toString().trim() || 'TWD',
@@ -1345,7 +1346,7 @@ Object.assign(OrdersUI, {
       if (!ok) return;
     }
     try {
-      await (window._svc ? window._svc('OrderService') : window.OrderService).remove(orderId);
+      await window._svc('OrderService').remove(orderId);
       await window.ordersUI.update();
     } catch (e) {
       console.error(e);
@@ -1355,5 +1356,153 @@ Object.assign(OrdersUI, {
     }
   }
 });
+
+
+// Phase 1B：事件委派（Orders）— 移除 inline on*，統一由 document handler 處理
+OrdersUI.bindDelegatedEvents = function bindDelegatedEvents() {
+  try {
+    if (window.__ordersDelegatedBound) return;
+    window.__ordersDelegatedBound = true;
+
+    const inOrders = (t) => {
+      try { return !!(t && t.closest && t.closest('.orders-module')); } catch (_) { return false; }
+    };
+
+    // Click actions
+    document.addEventListener('click', async (e) => {
+      const t = e.target;
+      if (!t || !t.closest) return;
+      if (!inOrders(t)) return;
+
+      const el = t.closest('[data-action]');
+      if (!el) return;
+
+      const act = (el.getAttribute('data-action') || '').toString();
+      const id = (el.getAttribute('data-id') || '').toString();
+      const idx = (el.getAttribute('data-index') || '').toString();
+      const val = (el.getAttribute('data-value') || '').toString();
+
+      // prevent default for button/link
+      if (el.tagName === 'A' || el.tagName === 'BUTTON') {
+        try { e.preventDefault(); } catch (_) {}
+      }
+
+      try {
+        switch (act) {
+          case 'orders.applyAll':
+            return OrdersUI.applyAll();
+          case 'orders.clearAll':
+            return OrdersUI.clearAll();
+          case 'orders.openCreateFromQuote':
+            return OrdersUI.openCreateFromQuote();
+          case 'orders.closeModal':
+            return OrdersUI.closeModal();
+          case 'orders.toggleAdvancedFilters':
+            return OrdersUI.toggleAdvancedFilters();
+          case 'orders.loadMore':
+            return OrdersUI.loadMore();
+          case 'orders.setQuickFilter':
+            return OrdersUI.setQuickFilter(val);
+          case 'orders.openDetail':
+            return OrdersUI.openDetail(id);
+          case 'orders.confirmRemove':
+            return OrdersUI.confirmRemove(id);
+          case 'orders.addItem':
+            return OrdersUI.addItem(id);
+          case 'orders.removeItem':
+            return OrdersUI.removeItem(id, Number(idx));
+          default:
+            return;
+        }
+      } catch (err) {
+        console.error('[OrdersUI] delegated click failed:', act, err);
+        try { window.ErrorHandler?.handle?.(err, 'Orders', 'MEDIUM', { act, id, idx, val }); } catch (_) {}
+      }
+    });
+
+    // Input actions
+    document.addEventListener('input', (e) => {
+      const t = e.target;
+      if (!t) return;
+      if (!inOrders(t)) return;
+
+      try {
+        if (t.id === 'orders-search') {
+          return OrdersUI.onSearchDraft(e);
+        }
+
+        const act = (t.getAttribute && t.getAttribute('data-action')) ? (t.getAttribute('data-action') || '') : '';
+        if (act === 'orders.recalcTotals') {
+          const oid = (t.getAttribute('data-id') || '').toString();
+          return OrdersUI.recalcTotals(oid);
+        }
+
+        if (act === 'orders.itemInput') {
+          const oid = (t.getAttribute('data-id') || '').toString();
+          const i = (t.getAttribute('data-index') || '').toString();
+          const field = (t.getAttribute('data-field') || '').toString();
+          OrdersUI.onItemInput(oid, Number(i), field, e);
+          if ((t.getAttribute('data-recalc') || '') === '1') {
+            OrdersUI.recalcTotals(oid);
+          }
+          return;
+        }
+
+        // advanced draft input (supplier keyword)
+        if (t.id === 'orders-filter-supplier') {
+          return OrdersUI.onAdvancedDraftChange();
+        }
+      } catch (err) {
+        console.error('[OrdersUI] delegated input failed:', err);
+      }
+    });
+
+    // Change actions
+    document.addEventListener('change', (e) => {
+      const t = e.target;
+      if (!t) return;
+      if (!inOrders(t)) return;
+
+      try {
+        if (t.id === 'orders-filter-status') return OrdersUI.setStatusDraft(e);
+        if (t.id === 'orders-filter-sort') return OrdersUI.setSortDraft(e);
+        if ((t.id || '').startsWith('orders-filter-')) return OrdersUI.onAdvancedDraftChange();
+      } catch (err) {
+        console.error('[OrdersUI] delegated change failed:', err);
+      }
+    });
+
+    // Keydown actions
+    document.addEventListener('keydown', (e) => {
+      const t = e.target;
+      if (!t) return;
+      if (!inOrders(t)) return;
+
+      try {
+        if (t.id === 'orders-search') return OrdersUI.onSearchKeydown(e);
+      } catch (_) {}
+    });
+
+    // Submit actions (capture)
+    document.addEventListener('submit', (e) => {
+      const form = e.target;
+      if (!form) return;
+      if (!inOrders(form)) return;
+
+      const act = (form.getAttribute('data-action') || '').toString();
+      try {
+        if (act === 'orders.handleCreateFromQuote') return OrdersUI.handleCreateFromQuote(e);
+        if (act === 'orders.handleSaveOrder') return OrdersUI.handleSaveOrder(e);
+      } catch (err) {
+        console.error('[OrdersUI] delegated submit failed:', err);
+      }
+    }, true);
+
+  } catch (e) {
+    console.warn('[OrdersUI] bindDelegatedEvents failed:', e);
+  }
+};
+
+try { OrdersUI.bindDelegatedEvents(); } catch (_) {}
 
 console.log('✅ OrdersUI loaded');

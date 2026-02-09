@@ -3,6 +3,9 @@
  * V161 - Settings Module - UI Layer
  */
 
+
+// Phase 1：registry-first 取得 Service（避免直接 window.XxxService）
+// 注意：本專案為非 module script（同一 global scope），避免宣告可重複載入時會衝突的 top-level const。
 class SettingsUI {
   constructor() {
     this.containerId = 'settings-container';
@@ -21,16 +24,16 @@ class SettingsUI {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    const settings = await window.SettingsService.getSettings();
+    const settings = await window._svc('SettingsService').getSettings();
 
     // Maintenance settings（MNT 系列）：允許在「設定」頁面直接管理
     let maintSettings = null;
     try {
-      if (window.MaintenanceService && typeof window.MaintenanceService.init === 'function') {
+      if (window._svc('MaintenanceService') && typeof window._svc('MaintenanceService').init === 'function') {
         // 避免在 Settings 頁面第一次進入時維護服務未初始化
-        if (!window.MaintenanceService.isInitialized) await window.MaintenanceService.init();
-        if (typeof window.MaintenanceService.getSettings === 'function') {
-          maintSettings = window.MaintenanceService.getSettings();
+        if (!window._svc('MaintenanceService').isInitialized) await window._svc('MaintenanceService').init();
+        if (typeof window._svc('MaintenanceService').getSettings === 'function') {
+          maintSettings = window._svc('MaintenanceService').getSettings();
         }
       }
     } catch (e) {
@@ -41,11 +44,11 @@ class SettingsUI {
     // 取得公司清單（用於釘選新增 autocomplete）
     let companies = [];
     try {
-      if (window.CustomerService && typeof window.CustomerService.init === 'function' && !window.CustomerService.isInitialized) {
-        await window.CustomerService.init();
+      if (window._svc('CustomerService') && typeof window._svc('CustomerService').init === 'function' && !window._svc('CustomerService').isInitialized) {
+        await window._svc('CustomerService').init();
       }
-      if (window.CustomerService && typeof window.CustomerService.getCompanies === 'function') {
-        companies = window.CustomerService.getCompanies() || [];
+      if (window._svc('CustomerService') && typeof window._svc('CustomerService').getCompanies === 'function') {
+        companies = window._svc('CustomerService').getCompanies() || [];
       }
     } catch (e) {
       console.warn('SettingsUI: CustomerService not ready, skip company list:', e);
@@ -407,7 +410,7 @@ class SettingsUI {
   // =========================
   renderMaintenanceSettingsCard(maintSettings) {
     // 若專案未載入 Maintenance 模組，直接略過
-    if (!window.MaintenanceService) return '';
+    if (!window._svc('MaintenanceService')) return '';
 
     const ms = (maintSettings && typeof maintSettings === 'object') ? maintSettings : {
       emailTo: '',
@@ -479,17 +482,17 @@ class SettingsUI {
     if (!tbody) return;
     tbody.innerHTML = `<tr><td colspan="6" class="muted" style="padding:14px;">載入中...</td></tr>`;
 
-    if (!window.UserAdminService) {
+    if (!window._svc('UserAdminService')) {
       tbody.innerHTML = `<tr><td colspan="6" style="padding:14px; color: var(--color-error);">UserAdminService 未載入（請確認 core/user-admin.js）</td></tr>`;
       return;
     }
 
-    let users = await window.UserAdminService.listUsers();
+    let users = await window._svc('UserAdminService').listUsers();
     users = Array.isArray(users) ? users : [];
 
     // 將預設使用者補齊到列表（即便 /users profile 被刪除，也能顯示並提供修復/寄送重設密碼）
     try {
-      const defaults = window.UserAdminService.getDefaultUsers ? window.UserAdminService.getDefaultUsers() : [];
+      const defaults = window._svc('UserAdminService').getDefaultUsers ? window._svc('UserAdminService').getDefaultUsers() : [];
       const present = new Set(users.map(u => String(u.email || '').toLowerCase()).filter(Boolean));
       for (const d of (defaults || [])) {
         const email = String(d.email || '').trim().toLowerCase();
@@ -703,7 +706,7 @@ class SettingsUI {
     }
 
     const doCreate = async () => {
-      if (!window.UserAdminService) {
+      if (!window._svc('UserAdminService')) {
         window.UI.toast('UserAdminService 未載入（請確認 core/user-admin.js）', { type: 'error' });
         return;
       }
@@ -717,7 +720,7 @@ class SettingsUI {
       }
       try {
         if (createBtn) { createBtn.disabled = true; createBtn.textContent = '建立中...'; }
-        const res = await window.UserAdminService.createUser({ email, displayName, role });
+        const res = await window._svc('UserAdminService').createUser({ email, displayName, role });
         const st = String(res?.status || '');
         if (st === 'created') {
           window.UI.toast(`已建立使用者：${email}`, { type: 'success' });
@@ -775,7 +778,7 @@ class SettingsUI {
 
           seedBtn.disabled = true;
           seedBtn.textContent = '建立中...';
-          const results = await window.UserAdminService.seedDefaultUsers();
+          const results = await window._svc('UserAdminService').seedDefaultUsers();
           const created = results.filter(r => r.status === 'created').length;
           const repaired = results.filter(r => (r.status === 'restored' || r.status === 'repaired')).length;
           const needsReset = results.filter(r => r.status === 'needs_reset').length;
@@ -822,7 +825,7 @@ class SettingsUI {
           }
         }
 
-        await window.UserAdminService.updateUserRole(uid, newRole);
+        await window._svc('UserAdminService').updateUserRole(uid, newRole);
         window.UI.toast('已更新角色', { type: 'success' });
       } catch (err) {
         console.warn(err);
@@ -888,7 +891,7 @@ ${email}
           });
           if (!ok) return;
 
-          const res = await window.UserAdminService.restoreExistingUserByEmail(email, { displayName, role: desiredRole });
+          const res = await window._svc('UserAdminService').restoreExistingUserByEmail(email, { displayName, role: desiredRole });
           if (res.status === 'needs_reset') {
             window.UI.toast(res.message || '無法取得 UID，請先寄送重設密碼並讓使用者登入一次。', { type: 'warning' });
           } else if (res.status === 'failed') {
@@ -900,12 +903,12 @@ ${email}
           return;
         } else if (act === 'forcepw') {
           if (!uid) { window.UI.toast('此帳號缺少 uid，請先執行「修復」。', { type: 'warning' }); return; }
-          await window.UserAdminService.forcePasswordChangeNextLogin(uid, true);
+          await window._svc('UserAdminService').forcePasswordChangeNextLogin(uid, true);
           window.UI.toast('已設定：下次登入需改密碼', { type: 'success' });
           await this.refreshUserAdminList();
         } else if (act === 'clearpw') {
           if (!uid) { window.UI.toast('此帳號缺少 uid，請先執行「修復」。', { type: 'warning' }); return; }
-          await window.UserAdminService.forcePasswordChangeNextLogin(uid, false);
+          await window._svc('UserAdminService').forcePasswordChangeNextLogin(uid, false);
           window.UI.toast('已解除：下次登入不再強制改密碼', { type: 'success' });
           await this.refreshUserAdminList();
         } else if (act === 'toggleDisable') {
@@ -919,7 +922,7 @@ ${email}
             tone: next ? 'danger' : 'default'
           });
           if (!ok) return;
-          await window.UserAdminService.setDisabled(uid, next);
+          await window._svc('UserAdminService').setDisabled(uid, next);
           window.UI.toast(next ? '已停用帳號' : '已解除停用', { type: 'success' });
           await this.refreshUserAdminList();
         }
@@ -1061,7 +1064,7 @@ ${email}
     const den = document.getElementById('settings-density')?.value || 'comfortable';
     const simpleMode = !!document.getElementById('settings-simple-mode')?.checked;
 
-    await window.SettingsService.update({
+    await window._svc('SettingsService').update({
       weeklyRecipients: rec,
       weeklyThisWeekBasis: (basis === 'updated') ? 'updated' : 'created',
       signature: sig,
@@ -1089,7 +1092,7 @@ ${email}
   }
 
   async saveMaintenanceSettingsOnly() {
-    if (!window.MaintenanceService || typeof window.MaintenanceService.updateSettings !== 'function') return;
+    if (!window._svc('MaintenanceService') || typeof window._svc('MaintenanceService').updateSettings !== 'function') return;
 
     const elTo = document.getElementById('settings-maint-email-to');
     const elCc = document.getElementById('settings-maint-email-cc');
@@ -1116,11 +1119,11 @@ ${email}
     })();
 
     // 確保 MaintenanceService 已 init（避免首次進入 Settings 頁尚未初始化）
-    if (typeof window.MaintenanceService.init === 'function' && !window.MaintenanceService.isInitialized) {
-      await window.MaintenanceService.init();
+    if (typeof window._svc('MaintenanceService').init === 'function' && !window._svc('MaintenanceService').isInitialized) {
+      await window._svc('MaintenanceService').init();
     }
 
-    await window.MaintenanceService.updateSettings({
+    await window._svc('MaintenanceService').updateSettings({
       emailTo,
       emailCc,
       useOwnerEmail,
@@ -1810,8 +1813,8 @@ ${email}
 
     // Realtime update hook
     try {
-      if (window.RepairTemplatesService && typeof window.RepairTemplatesService.onChange === 'function') {
-        window.RepairTemplatesService.onChange(() => this.refreshRepairTemplates());
+      if (window._svc('RepairTemplatesService') && typeof window._svc('RepairTemplatesService').onChange === 'function') {
+        window._svc('RepairTemplatesService').onChange(() => this.refreshRepairTemplates());
       }
     } catch (_) {}
 
@@ -1822,8 +1825,8 @@ ${email}
     const box = document.getElementById('templates-list');
     if (!box) return;
 
-    const list = (window.RepairTemplatesService && typeof window.RepairTemplatesService.getAll === 'function')
-      ? window.RepairTemplatesService.getAll()
+    const list = (window._svc('RepairTemplatesService') && typeof window._svc('RepairTemplatesService').getAll === 'function')
+      ? window._svc('RepairTemplatesService').getAll()
       : [];
 
     if (!list.length) {
@@ -1945,7 +1948,7 @@ _tplOnMachineChange() {
 }
 
   openTemplateModal(id=null) {
-    const t = id && window.RepairTemplatesService ? window.RepairTemplatesService.getById(id) : null;
+    const t = id && window._svc('RepairTemplatesService') ? window._svc('RepairTemplatesService').getById(id) : null;
 
     const modalId = 'template-modal';
     let modal = document.getElementById(modalId);
@@ -2038,26 +2041,26 @@ static tplHandleMachineChange(){ try{ window.settingsUI && window.settingsUI._tp
   static templateClone(id){
     (async()=>{
       try{
-        if (!window.RepairTemplatesService) return;
-        await window.RepairTemplatesService.clone(id);
+        if (!window._svc('RepairTemplatesService')) return;
+        await window._svc('RepairTemplatesService').clone(id);
       }catch(e){ console.error(e); }
     })();
   }
   static templateToggle(id){
     (async()=>{
       try{
-        if (!window.RepairTemplatesService) return;
-        await window.RepairTemplatesService.toggleEnabled(id);
+        if (!window._svc('RepairTemplatesService')) return;
+        await window._svc('RepairTemplatesService').toggleEnabled(id);
       }catch(e){ console.error(e); }
     })();
   }
   static templateRemove(id){
     (async()=>{
       try{
-        if (!window.RepairTemplatesService) return;
+        if (!window._svc('RepairTemplatesService')) return;
         const ok = confirm('確定刪除此模板？此動作無法復原。');
         if (!ok) return;
-        await window.RepairTemplatesService.remove(id);
+        await window._svc('RepairTemplatesService').remove(id);
       }catch(e){ console.error(e); }
     })();
   }
@@ -2068,7 +2071,7 @@ static tplHandleMachineChange(){ try{ window.settingsUI && window.settingsUI._tp
   static templateModalSave(){
     (async()=>{
       try{
-        if (!window.RepairTemplatesService) return;
+        if (!window._svc('RepairTemplatesService')) return;
         const modal = document.getElementById('template-modal');
         const editId = modal?.dataset?.editId || '';
         const enabled = document.getElementById('tpl-enabled').value === '1';
@@ -2087,7 +2090,7 @@ static tplHandleMachineChange(){ try{ window.settingsUI && window.settingsUI._tp
           // V161.114: needParts boolean
           needParts: !!document.getElementById('tpl-needParts').checked,
         });
-        await window.RepairTemplatesService.upsert(tpl);
+        await window._svc('RepairTemplatesService').upsert(tpl);
         SettingsUI.templateModalClose();
       }catch(e){ console.error(e); alert('儲存失敗，請查看 Console。'); }
     })();

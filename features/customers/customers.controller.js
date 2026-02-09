@@ -17,9 +17,17 @@ class CustomerController {
     try {
       console.log('👥 Initializing Customer Module...');
 
-      const svc = (typeof window._svc === 'function') ? window._svc('CustomerService') : window.CustomerService;
+      // Phase 1：集中化 Service 初始化（registry-first）
+      const reg = (typeof window !== 'undefined' && window.AppRegistry) ? window.AppRegistry : null;
+      if (reg && typeof reg.ensureReady === 'function') {
+        await reg.ensureReady(['CustomerService']);
+      }
+
+      const svc = (reg && typeof reg.get === 'function')
+        ? reg.get('CustomerService')
+        : (typeof window._svc === 'function' ? window._svc('CustomerService') : null);
+
       if (!svc || typeof svc.init !== 'function') throw new Error('CustomerService not available');
-      await svc.init();
 
       // 先渲染 UI，再訂閱資料變更
       window.customerUI.render(containerId);

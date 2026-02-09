@@ -26,25 +26,27 @@ class RepairController {
     
     try {
       console.log('🔧 Initializing Repair Module...');
-      
-      // Step 1: 初始化服務層
-      await window.RepairService.init();
-      try { if (window.RepairTemplatesService) await window.RepairTemplatesService.init(); } catch (e) { console.warn('RepairTemplatesService init failed', e); }
 
-      // Step 1.0: 初始化連動模組（零件/報價/訂單）以支援維修卡片的狀態 chips
-      try { if (window.RepairPartsService && typeof window.RepairPartsService.init === 'function' && !window.RepairPartsService.isInitialized) await window.RepairPartsService.init(); } catch (e) { console.warn('RepairController: RepairPartsService init skipped:', e); }
-      try { if (window.QuoteService && typeof window.QuoteService.init === 'function' && !window.QuoteService.isInitialized) await window.QuoteService.init(); } catch (e) { console.warn('RepairController: QuoteService init skipped:', e); }
-      try { if (window.OrderService && typeof window.OrderService.init === 'function' && !window.OrderService.isInitialized) await window.OrderService.init(); } catch (e) { console.warn('RepairController: OrderService init skipped:', e); }
-
-      // Step 1.1: 初始化設定（釘選 / 最近使用 / 歷史帶入）
-      try {
-        if (window.SettingsService && typeof window.SettingsService.init === 'function' && !window.SettingsService.isInitialized) {
-          await window.SettingsService.init();
-        }
-      } catch (e) {
-        console.warn('RepairController: SettingsService init skipped:', e);
+      // Step 1: 初始化服務層（Phase 1：registry-first）
+      const reg = (typeof window !== 'undefined' && window.AppRegistry) ? window.AppRegistry : null;
+      if (reg && typeof reg.ensureReady === 'function') {
+        await reg.ensureReady([
+          'RepairService',
+          'RepairTemplatesService',
+          'RepairPartsService',
+          'QuoteService',
+          'OrderService',
+          'SettingsService',
+          'WorkLogService'
+        ]);
       }
-      
+
+      const repairSvc = (reg && typeof reg.get === 'function')
+        ? reg.get('RepairService')
+        : (typeof window._svc === 'function' ? window._svc('RepairService') : null);
+
+      if (!repairSvc || typeof repairSvc.init !== 'function') throw new Error('RepairService not available');
+
       // Step 2: 渲染 UI
       window.repairUI.render(containerId);
       
@@ -64,6 +66,10 @@ class RepairController {
       const container = document.getElementById(containerId);
       if (container) {
         container.innerHTML = this.getFallbackUI();
+        try {
+          const btn = container.querySelector('[data-action="app.reload"]');
+          if (btn) btn.addEventListener('click', () => location.reload());
+        } catch (_) {}
       }
       throw error;
     }
@@ -86,7 +92,7 @@ class RepairController {
         <p style="color: #fca5a5; margin-bottom: 20px;">
           系統無法載入維修管理模組，請重新整理頁面或聯繫技術支援。
         </p>
-        <button onclick="location.reload()" class="btn primary">
+        <button type="button" class="btn primary" data-action="app.reload">
           重新載入
         </button>
       </div>
@@ -126,10 +132,14 @@ class RepairController {
    * 取得模組狀態
    */
   getStatus() {
+    const rs = (window.AppRegistry && typeof window.AppRegistry.get === 'function')
+      ? window.AppRegistry.get('RepairService')
+      : (typeof window._svc === 'function' ? window._svc('RepairService') : null);
+
     return {
       isInitialized: this.isInitialized,
-      repairsCount: RepairService.getAll().length,
-      stats: RepairService.getStats()
+      repairsCount: (rs && typeof rs.getAll === 'function') ? (rs.getAll() || []).length : 0,
+      stats: (rs && typeof rs.getStats === 'function') ? (rs.getStats() || {}) : {}
     };
   }
 }

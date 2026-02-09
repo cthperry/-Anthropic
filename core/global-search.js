@@ -593,7 +593,9 @@
 
   function _svc(name) {
     try {
-      return (typeof window._svc === 'function') ? window._svc(name) : window[name];
+      if (typeof window._svc === 'function') return window._svc(name);
+      if (window.AppRegistry && typeof window.AppRegistry.get === 'function') return window.AppRegistry.get(name);
+      return null;
     } catch (_) {
       return null;
     }

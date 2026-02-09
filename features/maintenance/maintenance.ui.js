@@ -85,7 +85,11 @@
     }
 
     _svc(){
-      try { return window._svc ? window._svc('MaintenanceService') : window.MaintenanceService; } catch (_) { return window.MaintenanceService; }
+      try {
+        if (typeof window._svc === 'function') return window._svc('MaintenanceService');
+        if (window.AppRegistry && typeof window.AppRegistry.get === 'function') return window.AppRegistry.get('MaintenanceService');
+      } catch (_) {}
+      return null;
     }
 
 

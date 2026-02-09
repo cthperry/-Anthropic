@@ -27,39 +27,16 @@ class MachinesController {
 
       // 先確保核心資料可用
 
-      // registry-first，window fallback
-      const RepairService = (typeof window._svc === 'function' ? window._svc('RepairService') : window.RepairService);
-      const RepairPartsService = (typeof window._svc === 'function' ? window._svc('RepairPartsService') : window.RepairPartsService);
-      const QuoteService = (typeof window._svc === 'function' ? window._svc('QuoteService') : window.QuoteService);
-      const OrderService = (typeof window._svc === 'function' ? window._svc('OrderService') : window.OrderService);
-      const MaintenanceService = (typeof window._svc === 'function' ? window._svc('MaintenanceService') : window.MaintenanceService);
-
-
-
-
-
-
-
-
-
-
-
-      if (RepairService && !RepairService.isInitialized) {
-        await RepairService.init();
-      }
-      if (RepairPartsService && !RepairPartsService.isInitialized) {
-        await RepairPartsService.init();
-      }
-      if (QuoteService && !QuoteService.isInitialized) {
-        await QuoteService.init();
-      }
-      if (OrderService && !OrderService.isInitialized) {
-        await OrderService.init();
-      }
-      if (MaintenanceService && !MaintenanceService.isInitialized) {
-        await MaintenanceService.init();
-      }
-
+      // Phase 1：集中化初始化（registry-first）
+      if (window.AppRegistry && typeof window.AppRegistry.ensureReady === 'function') {
+        await window.AppRegistry.ensureReady([
+          'RepairService',
+          'RepairPartsService',
+          'QuoteService',
+          'OrderService',
+          'MaintenanceService'
+        ]);
+      } 
       window.MachinesUI?.render?.(containerId);
 
       // 綁定：維修單更新 + 連動資料更新
@@ -82,7 +59,9 @@ class MachinesController {
     if (this._unsubRepair) return;
 
     try {
-      const RepairService = (typeof window._svc === 'function' ? window._svc('RepairService') : window.RepairService);
+      const RepairService = (window.AppRegistry && typeof window.AppRegistry.get === 'function')
+        ? window.AppRegistry.get('RepairService')
+        : (typeof window._svc === 'function' ? window._svc('RepairService') : null);
       if (RepairService && typeof RepairService.onChange === 'function') {
         this._unsubRepair = RepairService.onChange(() => this._debouncedRefresh());
       }

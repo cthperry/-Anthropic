@@ -14,6 +14,13 @@ class KBUI {
     // 效能：避免每個 key stroke 都全量重繪
     this.searchDebounce = null;
     this._renderToken = 0;
+
+    // Phase 1：事件委派（移除 inline onclick/oninput/onchange）
+    this._delegationBound = false;
+    this._delegationRoot = null;
+    this._onDelegatedClick = null;
+    this._onDelegatedInput = null;
+    this._onDelegatedKeydown = null;
   }
 
   _typeMeta(t){
@@ -45,7 +52,84 @@ class KBUI {
   }
 
   _getService(){
-    return (typeof window._svc === 'function') ? window._svc('KBService') : window.KBService;
+    // registry-first；避免直接 window.KBService
+    try {
+      if (typeof window._svc === 'function') return window._svc('KBService');
+      if (window.AppRegistry && typeof window.AppRegistry.get === 'function') return window.AppRegistry.get('KBService');
+    } catch (_) {}
+    return null;
+  }
+
+  _bindDelegation(rootEl){
+    const root = rootEl || document.querySelector('.kb-module');
+    if (!root) return;
+
+    // 若已綁定且 root 未變更，直接跳過
+    if (this._delegationBound && this._delegationRoot === root) return;
+
+    // 若 root 變更，解除舊綁定
+    try {
+      if (this._delegationBound && this._delegationRoot) {
+        if (this._onDelegatedClick) this._delegationRoot.removeEventListener('click', this._onDelegatedClick);
+        if (this._onDelegatedInput) this._delegationRoot.removeEventListener('input', this._onDelegatedInput);
+        if (this._onDelegatedKeydown) this._delegationRoot.removeEventListener('keydown', this._onDelegatedKeydown);
+      }
+    } catch (_) {}
+
+    this._delegationRoot = root;
+
+    // click
+    this._onDelegatedClick = (ev) => {
+      try {
+        const btn = ev?.target?.closest?.('[data-action]');
+        if (!btn || !root.contains(btn)) return;
+        const action = (btn.getAttribute('data-action') || '').toString();
+        if (!action) return;
+
+        // 預設避免 form button 觸發 submit
+        try { ev.preventDefault(); } catch (_) {}
+
+        if (action === 'kb-apply-search') return this.applySearch();
+        if (action === 'kb-clear-all') return this.clearAll();
+        if (action === 'kb-open-create') return this.openCreate();
+        if (action === 'kb-close-modal') return this.closeModal();
+        if (action === 'kb-set-type') return this.setType(btn.dataset.type || 'faq');
+        if (action === 'kb-clear-tags') return this.clearTags();
+        if (action === 'kb-toggle-tag') return this.toggleTag(btn.dataset.tag || '');
+        if (action === 'kb-open-view') return this.openView(btn.dataset.id || '');
+        if (action === 'kb-open-edit') return this.openEdit(btn.dataset.id || '');
+        if (action === 'kb-remove') return this.remove(btn.dataset.id || '');
+      } catch (e) {
+        console.warn('KBUI delegated click failed:', e);
+      }
+    };
+
+    // input
+    this._onDelegatedInput = (ev) => {
+      try {
+        const t = ev?.target;
+        if (!t || !root.contains(t)) return;
+        if (t && t.id === 'kb-search') {
+          this.onSearchDraft(ev);
+        }
+      } catch (_) {}
+    };
+
+    // keydown
+    this._onDelegatedKeydown = (ev) => {
+      try {
+        const t = ev?.target;
+        if (!t || !root.contains(t)) return;
+        if (t && t.id === 'kb-search') {
+          this.onSearchKeydown(ev);
+        }
+      } catch (_) {}
+    };
+
+    root.addEventListener('click', this._onDelegatedClick);
+    root.addEventListener('input', this._onDelegatedInput);
+    root.addEventListener('keydown', this._onDelegatedKeydown);
+    this._delegationBound = true;
   }
 
   render(containerId = 'main-content'){
@@ -62,10 +146,10 @@ class KBUI {
             <div class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">FAQ / 故障模式 / SOP / 案例</div>
           </div>
           <div class="module-toolbar-right">
-            <input id="kb-search" class="input" style="max-width:360px" placeholder="搜尋：關鍵字 / Tag / 設備 / 料號..." value="${this._escapeAttr(this.searchDraft || '')}" oninput="KBUI.onSearchDraft(event)" onkeydown="KBUI.onSearchKeydown(event)" />
-            <button class="btn" onclick="KBUI.applySearch()">搜尋</button>
-            <button class="btn ghost" onclick="KBUI.clearAll()">清除</button>
-            <button class="btn primary" onclick="KBUI.openCreate()">＋ 新增</button>
+            <input id="kb-search" class="input" style="max-width:360px" placeholder="搜尋：關鍵字 / Tag / 設備 / 料號..." value="${this._escapeAttr(this.searchDraft || '')}" />
+            <button class="btn" data-action="kb-apply-search">搜尋</button>
+            <button class="btn ghost" data-action="kb-clear-all">清除</button>
+            <button class="btn primary" data-action="kb-open-create">＋ 新增</button>
           </div>
         </div>
 
@@ -78,7 +162,7 @@ class KBUI {
         <div id="kb-list" class="card-list"></div>
 
         <div id="kb-modal" class="modal" style="display:none;">
-          <div class="modal-backdrop" onclick="KBUI.closeModal()"></div>
+          <div class="modal-backdrop" data-action="kb-close-modal"></div>
           <div class="modal-content" id="kb-modal-content"></div>
         </div>
       </div>
@@ -87,6 +171,12 @@ class KBUI {
     this._renderTypeChips();
     this._renderTagChips();
     this.updateList();
+
+    // Phase 1：事件委派（第二個模組）
+    try {
+      const root = host.querySelector('.kb-module');
+      this._bindDelegation(root);
+    } catch (_) {}
 
     // 即時更新（服務端更新 / 其他模組觸發）
     try {
@@ -110,7 +200,7 @@ class KBUI {
     el.innerHTML = types.map(t => {
       const meta = this._typeMeta(t);
       const active = (this.type === t) ? 'active' : '';
-      return `<button class="chip ${active}" onclick="KBUI.setType('${meta.key}')">${meta.icon} ${meta.label}</button>`;
+      return `<button class="chip ${active}" data-action="kb-set-type" data-type="${this._escapeAttr(meta.key)}">${meta.icon} ${meta.label}</button>`;
     }).join('');
   }
 
@@ -122,11 +212,11 @@ class KBUI {
 
     const chips = [];
     const allActive = (this.selectedTags.size === 0);
-    chips.push(`<button class="chip ${allActive ? 'active' : ''}" onclick="KBUI.clearTags()">🏷️ 全部</button>`);
+    chips.push(`<button class="chip ${allActive ? 'active' : ''}" data-action="kb-clear-tags">🏷️ 全部</button>`);
 
     for (const t of tags) {
       const a = this.selectedTags.has(t) ? 'active' : '';
-      chips.push(`<button class="chip ${a}" onclick="KBUI.toggleTag('${this._escape(t)}')">${this._escape(t)}</button>`);
+      chips.push(`<button class="chip ${a}" data-action="kb-toggle-tag" data-tag="${this._escapeAttr(t)}">${this._escape(t)}</button>`);
     }
 
     el.innerHTML = chips.join('');
@@ -279,9 +369,9 @@ class KBUI {
           ${badges ? `<div style="display:flex;flex-wrap:wrap;gap:8px;">${badges}</div>` : ''}
           ${brief ? `<div style="color:var(--color-text-secondary);line-height:1.5;word-break:break-word;">${brief}</div>` : ''}
           <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
-            <button class="btn sm" onclick="KBUI.openView('${this._escape(it.id)}')">開啟</button>
-            <button class="btn sm ghost" onclick="KBUI.openEdit('${this._escape(it.id)}')">編輯</button>
-            <button class="btn sm danger" onclick="KBUI.remove('${this._escape(it.id)}')">刪除</button>
+            <button class="btn sm" data-action="kb-open-view" data-id="${this._escapeAttr(it.id)}">開啟</button>
+            <button class="btn sm ghost" data-action="kb-open-edit" data-id="${this._escapeAttr(it.id)}">編輯</button>
+            <button class="btn sm danger" data-action="kb-remove" data-id="${this._escapeAttr(it.id)}">刪除</button>
           </div>
         </div>
       </div>
@@ -385,15 +475,15 @@ class KBUI {
           <h3>${meta.icon} ${meta.label} · 檢視</h3>
           <div class="muted" style="margin-top:6px;">${t || '-'}</div>
         </div>
-        <button class="modal-close" onclick="KBUI.closeModal()">×</button>
+        <button class="modal-close" type="button" data-action="kb-close-modal">×</button>
       </div>
       <div class="modal-body">
         ${tagsHtml ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">${tagsHtml}</div>` : ''}
         ${body || `<div class="muted">無內容</div>`}
       </div>
       <div class="modal-footer">
-        <button class="btn ghost" onclick="KBUI.closeModal()">關閉</button>
-        <button class="btn primary" onclick="KBUI.openEdit('${esc(item.id)}')">編輯</button>
+        <button class="btn ghost" type="button" data-action="kb-close-modal">關閉</button>
+        <button class="btn primary" type="button" data-action="kb-open-edit" data-id="${this._escapeAttr(item.id)}">編輯</button>
       </div>
     `;
   }
@@ -474,7 +564,7 @@ class KBUI {
           <h3>${meta.icon} ${meta.label} · ${mode === 'edit' ? '編輯' : '新增'}</h3>
           <div class="muted" style="margin-top:6px;">必填欄位會即時顯示紅色提示</div>
         </div>
-        <button class="modal-close" onclick="KBUI.closeModal()">×</button>
+        <button class="modal-close" type="button" data-action="kb-close-modal">×</button>
       </div>
       <div class="modal-body">
         <form id="kb-form" autocomplete="off">
@@ -510,8 +600,8 @@ class KBUI {
         </form>
       </div>
       <div class="modal-footer">
-        <button class="btn ghost" onclick="KBUI.closeModal()">取消</button>
-        <button class="btn primary" id="kb-save-btn">${mode === 'edit' ? '儲存' : '建立'}</button>
+        <button class="btn ghost" type="button" data-action="kb-close-modal">取消</button>
+        <button class="btn primary" type="button" id="kb-save-btn">${mode === 'edit' ? '儲存' : '建立'}</button>
       </div>
     `;
   }

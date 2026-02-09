@@ -19,10 +19,10 @@ class CustomerUIForms {
       <div class="modal-dialog">
         <div class="modal-header">
           <h3>${isEdit ? '編輯聯絡人' : '新增聯絡人'}</h3>
-          <button class="modal-close" onclick="CustomerUI.closeModal()">✕</button>
+          <button class="modal-close" data-action="closeModal">✕</button>
         </div>
 
-        <form id="customer-form" class="modal-body" onsubmit="CustomerUIForms.handleSubmit(event)">
+        <form id="customer-form" class="modal-body">
           <input type="hidden" name="id" value="${c.id || ''}" />
 
           <div class="form-section">
@@ -58,9 +58,9 @@ class CustomerUIForms {
         </form>
 
         <div class="modal-footer">
-          ${isEdit ? `<button class="btn danger" onclick="CustomerUIForms.confirmDelete('${c.id}')">刪除</button>` : '<div></div>'}
+          ${isEdit ? `<button class="btn danger" data-action="confirmDelete" data-id="${c.id}">刪除</button>` : '<div></div>'}
           <div style="display:flex; gap:8px;">
-            <button class="btn" onclick="CustomerUI.closeModal()">取消</button>
+            <button class="btn" data-action="closeModal">取消</button>
             <button type="submit" form="customer-form" class="btn primary">儲存</button>
           </div>
         </div>
@@ -76,7 +76,7 @@ class CustomerUIForms {
       <div class="modal-dialog">
         <div class="modal-header">
           <h3>聯絡人詳情</h3>
-          <button class="modal-close" onclick="CustomerUI.closeModal()">✕</button>
+          <button class="modal-close" data-action="closeModal">✕</button>
         </div>
 
         <div class="modal-body">
@@ -113,8 +113,8 @@ class CustomerUIForms {
         </div>
 
         <div class="modal-footer">
-          <button class="btn" onclick="CustomerUI.openForm('${c.id}')">編輯</button>
-          <button class="btn" onclick="CustomerUI.closeModal()">關閉</button>
+          <button class="btn" data-action="openForm" data-id="${c.id}">編輯</button>
+          <button class="btn" data-action="closeModal">關閉</button>
         </div>
       </div>
     `;

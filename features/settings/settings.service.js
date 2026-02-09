@@ -109,6 +109,6 @@ class SettingsService {
 }
 
 const settingsService = new SettingsService();
-window.SettingsService = settingsService;
+
   try { window.AppRegistry?.register?.('SettingsService', settingsService); } catch (_) {}
 console.log('✅ SettingsService loaded');

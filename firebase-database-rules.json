@@ -1,0 +1,139 @@
+{
+  "rules": {
+    "data": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid",
+
+        "repairs": {
+          "$repairId": {
+            ".validate": "newData.hasChildren(['customer','machine','issue','status','ownerUid','createdAt'])",
+            "id":             { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "repairNo":       { ".validate": "newData.isString() && newData.val().length <= 30" },
+            "customer":       { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200" },
+            "contact":        { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "phone":          { ".validate": "newData.isString() && newData.val().length <= 30" },
+            "email":          { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "productLine":    { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "machine":        { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200" },
+            "serialNumber":   { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "issue":          { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 2000" },
+            "content":        { ".validate": "newData.isString() && newData.val().length <= 5000" },
+            "status":         { ".validate": "newData.isString() && newData.val().matches(/^(進行中|需要零件|已完成)$/)" },
+            "progress":       { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+            "priority":       { ".validate": "newData.isString() && newData.val().length <= 20" },
+            "ownerUid":       { ".validate": "newData.isString() && newData.val() === auth.uid" },
+            "ownerName":      { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "ownerEmail":     { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "needParts":      { ".validate": "newData.isBoolean()" },
+            "partsOrdered":   { ".validate": "newData.isBoolean()" },
+            "partsArrived":   { ".validate": "newData.isBoolean()" },
+            "partsReplaced":  { ".validate": "newData.isBoolean()" },
+            "notes":          { ".validate": "newData.isString() && newData.val().length <= 5000" },
+            "tags":           { ".validate": "newData.isString() && newData.val().length <= 500" },
+            "createdAt":      { ".validate": "newData.isString()" },
+            "createdDate":    { ".validate": "newData.isString() && newData.val().length <= 10" },
+            "updatedAt":      { ".validate": "newData.isString()" },
+            "completedAt":    { ".validate": "newData.isString()" },
+            "isDeleted":      { ".validate": "newData.isBoolean()" },
+            "deletedAt":      { ".validate": "newData.isString()" },
+            "deletedBy":      { ".validate": "newData.isString()" },
+            "$other":         { ".validate": true }
+          }
+        },
+
+        "workLogs": {
+          ".indexOn": ["workDate", "repairId"],
+          "$logId": {
+            ".validate": "newData.hasChildren(['repairId','workDate','action','result','createdAt'])",
+            "id":             { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 50" },
+            "repairId":       { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 50" },
+            "workDate":       { ".validate": "newData.isString() && newData.val().matches(/^\\d{4}-\\d{2}-\\d{2}$/)" },
+            "action":         { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 1000" },
+            "findings":       { ".validate": "newData.isString() && newData.val().length <= 3000" },
+            "partsUsed":      { ".validate": "newData.isString() && newData.val().length <= 1000" },
+            "result":         { ".validate": "newData.isString() && newData.val().matches(/^(completed|pending|need_parts)$/)" },
+            "createdAt":      { ".validate": "newData.isString()" },
+            "updatedAt":      { ".validate": "newData.isString()" },
+            "$other":         { ".validate": false }
+          }
+        },
+
+        "repairHistory": {
+          "$repairId": {
+            "$historyId": {
+              ".validate": "newData.hasChildren(['action','timestamp'])",
+              "action":       { ".validate": "newData.isString() && newData.val().matches(/^(CREATE|UPDATE|DELETE)$/)" },
+              "timestamp":    { ".validate": "newData.isString()" },
+              "byUid":        { ".validate": "newData.isString()" },
+              "byName":       { ".validate": "newData.isString() && newData.val().length <= 100" },
+              "byEmail":      { ".validate": "newData.isString() && newData.val().length <= 200" },
+              "note":         { ".validate": "newData.isString() && newData.val().length <= 2000" },
+              "changed":      { ".validate": true },
+              "fromStatus":   { ".validate": "newData.isString()" },
+              "toStatus":     { ".validate": "newData.isString()" },
+              "$other":       { ".validate": true }
+            }
+          }
+        },
+
+        "repairParts": {
+          "$repairId": {
+            "$partId": {
+              ".validate": "newData.hasChildren(['name'])",
+              "$other":     { ".validate": true }
+            }
+          }
+        },
+
+        "quotes": {
+          "$quoteId": {
+            ".validate": "newData.hasChildren(['createdAt'])",
+            "$other":     { ".validate": true }
+          }
+        },
+
+        "orders": {
+          "$orderId": {
+            ".validate": "newData.hasChildren(['createdAt'])",
+            "$other":     { ".validate": true }
+          }
+        },
+
+        "maintenance": {
+          "$other": { ".validate": true }
+        },
+
+        "machines": {
+          "$other": { ".validate": true }
+        },
+
+        "customers": {
+          "$other": { ".validate": true }
+        },
+
+        "settings": {
+          "$other": { ".validate": true }
+        },
+
+        "counters": {
+          "$other": { ".validate": true }
+        }
+      }
+    },
+
+    "weeklyPlans": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    },
+
+    "serialIndex": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    }
+  }
+}
